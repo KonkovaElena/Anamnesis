@@ -44,4 +44,4 @@ Future phases should not upgrade public claims faster than code, tests, and evid
 
 Research arrival alone is not a scope upgrade.
 
-The canonical future-phase architecture now lives in the parent March 30 authority pack under `docs/superpowers/specs/2026-03-30-personal-doctor-*.md`.
+The local authority set for future-phase architecture is `design.md`, `docs/roadmap-and-validation.md`, and `docs/academic/evidence-register.md`.   

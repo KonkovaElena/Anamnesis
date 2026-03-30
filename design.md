@@ -36,11 +36,13 @@ The project should earn any future medical positioning through explicit workflow
 
 ## Future Architecture Authority
 
-The broader v6-style architecture for this project now lives in the parent authority pack, not in this standalone runtime surface.
+The broader future-phase architecture for this project is normalized into this standalone repository rather than kept as an external dependency.
 
-- parent scope and phase boundary: `docs/superpowers/specs/2026-03-30-personal-doctor-project-design.md`;
-- parent evidence authority: `docs/superpowers/specs/2026-03-30-personal-doctor-march-2026-evidence.md`;
-- parent future-phase map: `docs/superpowers/specs/2026-03-30-personal-doctor-research-roadmap.md`.
+- local scope and phase boundary: `design.md`;
+- local evidence authority: `docs/academic/evidence-register.md`;
+- local future-phase map: `docs/roadmap-and-validation.md`.
+
+These surfaces capture the March 30, 2026 authority snapshot in standalone form so the project can be reviewed, transferred, and evolved without requiring the parent monorepo.
 
 That means terms such as multi-agent orchestration, evidence engine, FHIR-compatible data seams, governance layer, or agent-native patient graph remain roadmap concepts until this standalone gains matching code and verification.
 

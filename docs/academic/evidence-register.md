@@ -10,25 +10,25 @@ tags: [personal-doctor, healthcare, evidence, academic]
 
 ## Current Source Classes
 
-- repo analogs from other healthcare-adjacent standalones in this repository;
-- regulatory framing captured in the parent design pack;
+- local implementation docs for the current runtime boundary;
+- normalized March 30, 2026 design and evidence material folded into this standalone repository at export time;
 - user research memo treated as roadmap and risk input only.
 
-## Parent Authority Surfaces
+## Local Authority Surfaces
 
-- `docs/superpowers/specs/2026-03-30-personal-doctor-march-2026-evidence.md`
-- `docs/superpowers/specs/2026-03-30-personal-doctor-research-roadmap.md`
-- `docs/superpowers/specs/2026-03-30-personal-doctor-project-design.md`
-- `docs/superpowers/specs/2026-03-30-personal-doctor-architecture-blueprint.md`
+- `design.md`
+- `docs/roadmap-and-validation.md`
+- `docs/regulatory/positioning.md`
+- `docs/claim-boundary.md`
 
-## Authority Boundary
+## Provenance Boundary
 
-This local document is a pointer, not the canonical evidence pack.
+This repository intentionally internalizes its March 30, 2026 evidence and roadmap snapshot so it can stand on its own.
 
-The parent authority for March 2026 evidence remains `docs/superpowers/specs/2026-03-30-personal-doctor-march-2026-evidence.md`.
+The local authority for standalone claims is the local authority set above.
 
-Research-to-phase decisions live in `docs/superpowers/specs/2026-03-30-personal-doctor-research-roadmap.md`.
+Research-to-phase decisions for this standalone live in `docs/roadmap-and-validation.md`.
 
-The broader v6-style subsystem concepts such as multi-agent orchestration, evidence engine design, FHIR-compatible data seams, governance and safety layers, and agent-native patient-graph candidates remain parent-side roadmap material until this standalone ships them.
+The broader v6-style subsystem concepts such as multi-agent orchestration, evidence engine design, FHIR-compatible data seams, governance and safety layers, and agent-native patient-graph candidates remain roadmap material until this standalone ships them.
 
 No standalone runtime claim should be widened from this file alone.

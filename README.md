@@ -77,9 +77,11 @@ The status model is intentionally narrow and never implies medical finality.
 7. `docs/regulatory/positioning.md`
 8. `docs/roadmap-and-validation.md`
 
-## Parent Design Pack
+## Local Design Pack
 
-The parent repository keeps the design and evidence pack in `docs/superpowers/specs/2026-03-30-personal-doctor-*.md`.
+This standalone repository keeps its design, scope, and evidence surfaces locally.
+
+The current documentation set is a normalized March 30, 2026 snapshot prepared so the project can move independently from the parent monorepo.
 
 ## Claim Boundary
 
