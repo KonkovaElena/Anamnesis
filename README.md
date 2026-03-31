@@ -23,6 +23,7 @@ It implements a narrow workflow baseline that helps a user organize case intake,
 - source artifact registration (with future-date rejection);
 - artifact and case deletion;
 - physician packet draft generation;
+- explicit clinician review ledger (approved / changes_requested / rejected);
 - operations summary;
 - Bearer-token authentication (`API_KEY`);
 - per-IP sliding-window rate limiting (`RATE_LIMIT_RPM`);
@@ -71,6 +72,8 @@ Default runtime port: `4020`
 - `DELETE /api/cases/:caseId/artifacts/:artifactId`
 - `POST /api/cases/:caseId/physician-packets`
 - `GET /api/cases/:caseId/physician-packets`
+- `POST /api/cases/:caseId/physician-packets/:packetId/reviews`
+- `GET /api/cases/:caseId/physician-packets/:packetId/reviews`
 - `DELETE /api/cases/:caseId`
 - `GET /api/operations/summary`
 - `GET /healthz`
@@ -79,9 +82,18 @@ Default runtime port: `4020`
 
 ## Current Status Model
 
+### Case Status
+
 - `INTAKING`
 - `READY_FOR_PACKET`
 - `REVIEW_REQUIRED`
+
+### Physician Packet Status
+
+- `DRAFT_REVIEW_REQUIRED`
+- `CLINICIAN_APPROVED`
+- `CHANGES_REQUESTED`
+- `REJECTED`
 
 The status model is intentionally narrow and never implies medical finality.
 
@@ -140,6 +152,5 @@ The server applies the following hardening defaults:
 
 ## Known Limitations
 
-- **No PII encryption at rest.** Case data including patient labels, symptoms, and clinical history is stored in plain memory. Durable persistence phases must address encryption at rest and explicit consent records before handling real patient data.
-- **No audit trail.** Write operations are not yet logged as an auditable event stream. The roadmap includes a clinician review ledger in Phase 3.
-- **In-memory store only.** All data is lost on process restart. Durable persistence is a future hardening step.
+- **No PII encryption at transit.** HTTPS must be enforced at the reverse-proxy layer for any deployment beyond localhost.
+- **No audit trail.** Write operations are not yet logged as an auditable event stream. The roadmap includes packet finalization and an explicit audit trail in a future phase.

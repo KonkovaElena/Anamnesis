@@ -1,7 +1,7 @@
 ---
 title: "Personal Doctor Architecture Overview"
 status: active
-version: "0.5.0"
+version: "0.6.0"
 last_updated: "2026-04-01"
 tags: [personal-doctor, healthcare, architecture, reference]
 ---

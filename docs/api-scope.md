@@ -1,8 +1,8 @@
 ---
 title: "Personal Doctor API Scope"
 status: active
-version: "0.4.0"
-last_updated: "2026-03-31"
+version: "0.6.0"
+last_updated: "2026-04-01"
 tags: [personal-doctor, healthcare, api-scope, reference]
 ---
 
@@ -17,6 +17,8 @@ tags: [personal-doctor, healthcare, api-scope, reference]
 - `DELETE /api/cases/:caseId/artifacts/:artifactId`
 - `POST /api/cases/:caseId/physician-packets`
 - `GET /api/cases/:caseId/physician-packets`
+- `POST /api/cases/:caseId/physician-packets/:packetId/reviews`
+- `GET /api/cases/:caseId/physician-packets/:packetId/reviews`
 - `DELETE /api/cases/:caseId`
 - `GET /api/operations/summary`
 - `GET /healthz`

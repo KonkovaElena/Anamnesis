@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 
 export type CaseStatus = "INTAKING" | "READY_FOR_PACKET" | "REVIEW_REQUIRED";
 export type ArtifactType = "note" | "lab" | "summary" | "report" | "imaging-summary";
-export type PhysicianPacketStatus = "DRAFT_REVIEW_REQUIRED";
+export type PhysicianPacketStatus = "DRAFT_REVIEW_REQUIRED" | "CLINICIAN_APPROVED" | "CHANGES_REQUESTED" | "REJECTED";
+export type ReviewAction = "approved" | "changes_requested" | "rejected";
 
 export interface CaseIntake {
   chiefConcern: string;
@@ -51,11 +52,26 @@ export interface PhysicianPacket {
   title: string;
   artifactIds: string[];
   sections: PhysicianPacketSection[];
+  reviews: ClinicalReviewEntry[];
 }
 
 export interface CreatePhysicianPacketInput {
   requestedBy?: string;
   focus?: string;
+}
+
+export interface ClinicalReviewEntry {
+  reviewId: string;
+  reviewerName: string;
+  action: ReviewAction;
+  comments?: string;
+  createdAt: string;
+}
+
+export interface SubmitReviewInput {
+  reviewerName: string;
+  action: ReviewAction;
+  comments?: string;
 }
 
 export interface PersonalDoctorCase {
@@ -73,6 +89,7 @@ export interface OperationsSummary {
   totalCases: number;
   totalArtifacts: number;
   totalPackets: number;
+  totalReviews: number;
   statusCounts: Record<CaseStatus, number>;
   lastUpdatedAt: string | null;
 }
@@ -225,6 +242,7 @@ export function draftPhysicianPacket(
     title: `Physician packet draft for case ${record.caseId.slice(0, 8)}`,
     artifactIds: record.artifacts.map((artifact) => artifact.artifactId),
     sections: buildPacketSections(record, input),
+    reviews: [],
   };
 
   return {
@@ -288,12 +306,16 @@ export function buildOperationsSummary(cases: PersonalDoctorCase[]): OperationsS
 
   let totalArtifacts = 0;
   let totalPackets = 0;
+  let totalReviews = 0;
   let lastUpdatedAt: string | null = null;
 
   for (const record of cases) {
     statusCounts[record.status] += 1;
     totalArtifacts += record.artifacts.length;
     totalPackets += record.physicianPackets.length;
+    for (const packet of record.physicianPackets) {
+      totalReviews += packet.reviews.length;
+    }
     if (lastUpdatedAt === null || record.updatedAt > lastUpdatedAt) {
       lastUpdatedAt = record.updatedAt;
     }
@@ -303,7 +325,66 @@ export function buildOperationsSummary(cases: PersonalDoctorCase[]): OperationsS
     totalCases: cases.length,
     totalArtifacts,
     totalPackets,
+    totalReviews,
     statusCounts,
     lastUpdatedAt,
+  };
+}
+
+const REVIEW_ACTION_TO_STATUS: Record<ReviewAction, PhysicianPacketStatus> = {
+  approved: "CLINICIAN_APPROVED",
+  changes_requested: "CHANGES_REQUESTED",
+  rejected: "REJECTED",
+};
+
+export function submitReview(
+  record: PersonalDoctorCase,
+  packetId: string,
+  input: SubmitReviewInput,
+  now = new Date(),
+): { nextCase: PersonalDoctorCase; review: ClinicalReviewEntry } {
+  const packetIndex = record.physicianPackets.findIndex((p) => p.packetId === packetId);
+  if (packetIndex === -1) {
+    throw new PersonalDoctorDomainError(
+      "packet_not_found",
+      404,
+      "Physician packet not found.",
+    );
+  }
+
+  const packet = record.physicianPackets[packetIndex]!;
+
+  if (packet.status === "CLINICIAN_APPROVED") {
+    throw new PersonalDoctorDomainError(
+      "packet_already_approved",
+      409,
+      "Cannot review a packet that has already been approved.",
+    );
+  }
+
+  const review: ClinicalReviewEntry = {
+    reviewId: randomUUID(),
+    reviewerName: input.reviewerName,
+    action: input.action,
+    comments: input.comments,
+    createdAt: toIso(now),
+  };
+
+  const updatedPacket: PhysicianPacket = {
+    ...packet,
+    status: REVIEW_ACTION_TO_STATUS[input.action],
+    reviews: [...packet.reviews, review],
+  };
+
+  const updatedPackets = [...record.physicianPackets];
+  updatedPackets[packetIndex] = updatedPacket;
+
+  return {
+    review,
+    nextCase: {
+      ...record,
+      updatedAt: toIso(now),
+      physicianPackets: updatedPackets,
+    },
   };
 }

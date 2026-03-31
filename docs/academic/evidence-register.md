@@ -1,7 +1,7 @@
 ---
 title: "Personal Doctor Evidence Register"
 status: active
-version: "0.4.0"
+version: "0.6.0"
 last_updated: "2026-03-31"
 tags: [personal-doctor, healthcare, evidence, academic]
 ---

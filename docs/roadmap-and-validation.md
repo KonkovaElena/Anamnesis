@@ -1,7 +1,7 @@
 ---
 title: "Personal Doctor Roadmap And Validation"
 status: active
-version: "0.5.0"
+version: "0.6.0"
 last_updated: "2026-04-01"
 tags: [personal-doctor, healthcare, roadmap, validation]
 ---
@@ -25,9 +25,17 @@ Then verify:
 
 ## Next Logical Expansions
 
-1. explicit clinician review ledger;
-2. packet finalization and audit trail;
-3. bounded document-ingestion seam.
+1. packet finalization and audit trail;
+2. bounded document-ingestion seam.
+
+## Completed In v0.6.0
+
+- explicit clinician review ledger (approved / changes_requested / rejected);
+- physician packet status transitions (DRAFT_REVIEW_REQUIRED → CLINICIAN_APPROVED / CHANGES_REQUESTED / REJECTED);
+- append-only review entries on each physician packet;
+- review guard: approved packets reject further reviews;
+- reviews metric in `/metrics` endpoint;
+- 17 new tests (8 domain unit + 9 API integration).
 
 ## Completed In v0.5.0
 

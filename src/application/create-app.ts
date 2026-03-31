@@ -8,6 +8,7 @@ import {
   type PersonalDoctorStore,
   addArtifact,
   buildOperationsSummary,
+  submitReview,
   createCase,
   draftPhysicianPacket,
   removeArtifact,
@@ -51,6 +52,12 @@ const createPacketSchema = z.strictObject({
   focus: z.string().trim().min(1).max(300).optional(),
 });
 
+const submitReviewSchema = z.strictObject({
+  reviewerName: z.string().trim().min(1).max(120),
+  action: z.enum(["approved", "changes_requested", "rejected"]),
+  comments: z.string().trim().min(1).max(4000).optional(),
+});
+
 interface CreateAppDependencies {
   store: PersonalDoctorStore;
   isShuttingDown?: () => boolean;
@@ -85,6 +92,9 @@ function renderMetrics(cases: PersonalDoctorCase[]): string {
     "# HELP personal_doctor_packets_total Total number of physician packet drafts.",
     "# TYPE personal_doctor_packets_total gauge",
     `personal_doctor_packets_total ${summary.totalPackets}`,
+    "# HELP personal_doctor_reviews_total Total number of clinician review entries.",
+    "# TYPE personal_doctor_reviews_total gauge",
+    `personal_doctor_reviews_total ${summary.totalReviews}`,
     "# HELP personal_doctor_cases_by_status Total cases by workflow status.",
     "# TYPE personal_doctor_cases_by_status gauge",
   ];
@@ -214,6 +224,54 @@ export function createApp({ store, isShuttingDown, authMiddleware, rateLimitRpm 
       physicianPackets: record.physicianPackets,
       meta: {
         totalPackets: record.physicianPackets.length,
+      },
+    });
+  });
+
+  app.post("/api/cases/:caseId/physician-packets/:packetId/reviews", parseJson, async (request, response) => {
+    const record = await store.getCase(readRouteParam(request.params.caseId));
+    if (!record) {
+      response.status(404).json({
+        code: "case_not_found",
+        message: "Case not found.",
+      });
+      return;
+    }
+
+    const packetId = readRouteParam(request.params.packetId);
+    const input = submitReviewSchema.parse(request.body ?? {});
+    const result = submitReview(record, packetId, input);
+    await store.saveCase(result.nextCase);
+    response.status(201).json({
+      review: result.review,
+    });
+  });
+
+  app.get("/api/cases/:caseId/physician-packets/:packetId/reviews", async (request, response) => {
+    const record = await store.getCase(readRouteParam(request.params.caseId));
+    if (!record) {
+      response.status(404).json({
+        code: "case_not_found",
+        message: "Case not found.",
+      });
+      return;
+    }
+
+    const packetId = readRouteParam(request.params.packetId);
+    const packet = record.physicianPackets.find((p) => p.packetId === packetId);
+    if (!packet) {
+      response.status(404).json({
+        code: "packet_not_found",
+        message: "Physician packet not found.",
+      });
+      return;
+    }
+
+    response.json({
+      reviews: packet.reviews,
+      meta: {
+        totalReviews: packet.reviews.length,
+        packetStatus: packet.status,
       },
     });
   });
