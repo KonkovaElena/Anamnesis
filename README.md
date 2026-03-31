@@ -14,6 +14,7 @@ It implements a narrow workflow baseline that helps a user organize case intake,
 | TypeScript | 6.0 | Type system & compiler |
 | Express | 5.2 | HTTP framework |
 | Zod | 4.3 | Runtime input validation |
+| better-sqlite3 | 12.x | Durable SQLite persistence |
 | node:test | built-in | Test runner |
 
 ## Current Scope
@@ -27,6 +28,7 @@ It implements a narrow workflow baseline that helps a user organize case intake,
 - per-IP sliding-window rate limiting (`RATE_LIMIT_RPM`);
 - security headers via Helmet (CSP, HSTS, COOP, CORP, Referrer-Policy, etc.);
 - graceful HTTP shutdown with connection draining;
+- durable SQLite persistence with AES-256-GCM encryption at rest;
 - `GET /healthz`, `GET /readyz`, and `GET /metrics`.
 
 ## Non-Goals In This Slice
@@ -57,6 +59,8 @@ Default runtime port: `4020`
 | `PORT` | No | `4020` | HTTP listen port |
 | `API_KEY` | No | — | Bearer token for API authentication. When unset, all endpoints are unauthenticated (dev mode). |
 | `RATE_LIMIT_RPM` | No | `0` (disabled) | Maximum requests per minute per IP. Health and readiness probes are exempt. |
+| `STORE_PATH` | No | — | Path to SQLite database file (e.g. `./data/personal-doctor.db`). When unset, data is stored in memory only. |
+| `ENCRYPTION_KEY` | When `STORE_PATH` is set | — | 64-character hex string (256-bit AES key). Generate with: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
 
 ## API Surface
 

@@ -19,15 +19,23 @@ async function main() {
 
   const apiKey = process.env.API_KEY?.trim() || undefined;
   const rateLimitRpm = Number(process.env.RATE_LIMIT_RPM ?? "0") || undefined;
+  const storePath = process.env.STORE_PATH?.trim() || undefined;
+  const encryptionKey = process.env.ENCRYPTION_KEY?.trim() || undefined;
 
   if (!apiKey) {
     process.stdout.write("[WARN] API_KEY is not set — all endpoints are unauthenticated. Set API_KEY in production.\n");
   }
 
-  const { app } = bootstrap({
+  if (!storePath) {
+    process.stdout.write("[WARN] STORE_PATH is not set — using in-memory store. Data will not persist across restarts.\n");
+  }
+
+  const { app, closeStore } = bootstrap({
     isShuttingDown: () => shuttingDown,
     apiKey,
     rateLimitRpm,
+    storePath,
+    encryptionKey,
   });
   const port = resolvePort();
 
@@ -53,8 +61,8 @@ async function main() {
     },
   });
 
-  process.on("SIGTERM", () => { shuttingDown = true; gracefulShutdown("SIGTERM"); });
-  process.on("SIGINT", () => { shuttingDown = true; gracefulShutdown("SIGINT"); });
+  process.on("SIGTERM", () => { shuttingDown = true; closeStore?.(); gracefulShutdown("SIGTERM"); });
+  process.on("SIGINT", () => { shuttingDown = true; closeStore?.(); gracefulShutdown("SIGINT"); });
 
   server.listen(port);
   await once(server, "listening");

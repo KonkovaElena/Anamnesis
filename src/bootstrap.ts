@@ -1,15 +1,33 @@
 import { type NextFunction, type Request, type Response } from "express";
 import { createApp } from "./application/create-app";
 import { InMemoryPersonalDoctorStore } from "./infrastructure/InMemoryPersonalDoctorStore";
+import { parseEncryptionKey } from "./infrastructure/encryption";
+import { SqlitePersonalDoctorStore } from "./infrastructure/SqlitePersonalDoctorStore";
+import type { PersonalDoctorStore } from "./domain/personal-doctor";
 
 export interface BootstrapOptions {
   isShuttingDown?: () => boolean;
   apiKey?: string;
   rateLimitRpm?: number;
+  storePath?: string;
+  encryptionKey?: string;
 }
 
 export function bootstrap(options?: BootstrapOptions) {
-  const store = new InMemoryPersonalDoctorStore();
+  let store: PersonalDoctorStore;
+  let closeStore: (() => void) | undefined;
+
+  if (options?.storePath) {
+    if (!options.encryptionKey) {
+      throw new Error("ENCRYPTION_KEY is required when STORE_PATH is set");
+    }
+    const key = parseEncryptionKey(options.encryptionKey);
+    const sqliteStore = new SqlitePersonalDoctorStore({ dbPath: options.storePath, encryptionKey: key });
+    store = sqliteStore;
+    closeStore = () => sqliteStore.close();
+  } else {
+    store = new InMemoryPersonalDoctorStore();
+  }
 
   let authMiddleware: ((req: Request, res: Response, next: NextFunction) => void) | undefined;
   if (options?.apiKey) {
@@ -30,5 +48,6 @@ export function bootstrap(options?: BootstrapOptions) {
   return {
     app,
     store,
+    closeStore,
   };
 }

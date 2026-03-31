@@ -1,8 +1,8 @@
 ---
 title: "Personal Doctor Roadmap And Validation"
 status: active
-version: "0.4.0"
-last_updated: "2026-03-31"
+version: "0.5.0"
+last_updated: "2026-04-01"
 tags: [personal-doctor, healthcare, roadmap, validation]
 ---
 
@@ -25,10 +25,16 @@ Then verify:
 
 ## Next Logical Expansions
 
-1. durable persistence with encryption at rest;
-2. explicit clinician review ledger;
-3. packet finalization and audit trail;
-4. bounded document-ingestion seam.
+1. explicit clinician review ledger;
+2. packet finalization and audit trail;
+3. bounded document-ingestion seam.
+
+## Completed In v0.5.0
+
+- durable SQLite persistence (`STORE_PATH`);
+- AES-256-GCM whole-record encryption at rest (`ENCRYPTION_KEY`);
+- in-memory fallback when no store path is set;
+- graceful database close on shutdown.
 
 ## Completed In v0.4.0
 

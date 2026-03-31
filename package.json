@@ -1,6 +1,6 @@
 {
   "name": "personal-doctor-control-plane",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "description": "Clinician-in-the-loop personal health control plane bootstrap",
   "license": "MIT",
@@ -22,11 +22,13 @@
     "express"
   ],
   "dependencies": {
+    "better-sqlite3": "^12.8.0",
     "express": "^5.2.1",
     "helmet": "^8.1.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/express": "^5.0.6",
     "@types/node": "^25.5.0",
     "tsx": "^4.21.0",

@@ -1,8 +1,8 @@
 ---
 title: "Personal Doctor Claim Boundary"
 status: active
-version: "0.4.0"
-last_updated: "2026-03-31"
+version: "0.5.0"
+last_updated: "2026-04-01"
 tags: [personal-doctor, healthcare, claim-boundary, reference]
 ---
 
@@ -10,7 +10,7 @@ tags: [personal-doctor, healthcare, claim-boundary, reference]
 
 ## Implemented Truth
 
-- the repository stores cases in memory;
+- the repository stores cases in SQLite with AES-256-GCM encryption at rest (or in memory when no store path is configured);
 - it registers source artifacts (with future-date rejection);
 - it supports artifact and case deletion;
 - it drafts physician packets from currently stored case data;

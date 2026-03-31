@@ -1,8 +1,8 @@
 ---
 title: "Personal Doctor Scope Lock"
 status: active
-version: "0.4.0"
-last_updated: "2026-03-31"
+version: "0.5.0"
+last_updated: "2026-04-01"
 tags: [personal-doctor, healthcare, scope-lock, reference]
 ---
 
@@ -19,7 +19,8 @@ tags: [personal-doctor, healthcare, scope-lock, reference]
 - Bearer-token authentication;
 - per-IP sliding-window rate limiting;
 - security headers via Helmet (CSP, HSTS, COOP, CORP, etc.);
-- graceful HTTP shutdown with connection draining.
+- graceful HTTP shutdown with connection draining;
+- durable SQLite persistence with AES-256-GCM encryption at rest.
 
 ## Excluded Now
 

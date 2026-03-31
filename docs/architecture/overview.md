@@ -1,8 +1,8 @@
 ---
 title: "Personal Doctor Architecture Overview"
 status: active
-version: "0.4.0"
-last_updated: "2026-03-31"
+version: "0.5.0"
+last_updated: "2026-04-01"
 tags: [personal-doctor, healthcare, architecture, reference]
 ---
 
@@ -19,6 +19,8 @@ The current standalone uses a reduced runtime chain:
 - `src/application/rate-limiter.ts`
 - `src/domain/personal-doctor.ts`
 - `src/infrastructure/InMemoryPersonalDoctorStore.ts`
+- `src/infrastructure/SqlitePersonalDoctorStore.ts`
+- `src/infrastructure/encryption.ts`
 - `src/graceful-shutdown.ts`
 
 ## Intent By Layer
@@ -27,11 +29,9 @@ The current standalone uses a reduced runtime chain:
 | --- | --- |
 | Domain | case workflow state, artifact model, physician packet draft model |
 | Application | HTTP routes, request validation, response contracts, error mapping, auth middleware, rate limiting |
-| Infrastructure | in-memory persistence |
+| Infrastructure | durable SQLite persistence with AES-256-GCM encryption at rest; in-memory fallback |
 
 ## Deliberately Missing
-
-- database persistence;
 - document parsing pipeline;
 - clinician review ledger;
 - event publishing;

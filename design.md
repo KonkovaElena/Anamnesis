@@ -1,8 +1,8 @@
 ---
 title: "Personal Doctor Standalone Design"
 status: active
-version: "0.4.0"
-last_updated: "2026-03-31"
+version: "0.5.0"
+last_updated: "2026-04-01"
 tags: [personal-doctor, healthcare, standalone, explanation]
 ---
 
@@ -29,7 +29,8 @@ The project should earn any future medical positioning through explicit workflow
 
 ## Current Storage And Composition
 
-- in-memory case persistence;
+- durable SQLite persistence with AES-256-GCM whole-record encryption at rest;
+- in-memory fallback when `STORE_PATH` is not configured;
 - explicit bootstrap seam in `src/bootstrap.ts`;
 - reduced Domain -> Application -> Infrastructure split;
 - no plugin, MCP, MAS, multi-agent council, or evidence-engine runtime adoption in this slice.
