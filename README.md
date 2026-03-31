@@ -24,6 +24,8 @@ It implements a narrow workflow baseline that helps a user organize case intake,
 - artifact and case deletion;
 - physician packet draft generation;
 - explicit clinician review ledger (approved / changes_requested / rejected);
+- physician packet finalization after clinician approval;
+- append-only per-case audit trail;
 - operations summary;
 - Bearer-token authentication (`API_KEY`);
 - per-IP sliding-window rate limiting (`RATE_LIMIT_RPM`);
@@ -74,6 +76,8 @@ Default runtime port: `4020`
 - `GET /api/cases/:caseId/physician-packets`
 - `POST /api/cases/:caseId/physician-packets/:packetId/reviews`
 - `GET /api/cases/:caseId/physician-packets/:packetId/reviews`
+- `POST /api/cases/:caseId/physician-packets/:packetId/finalize`
+- `GET /api/cases/:caseId/audit-events`
 - `DELETE /api/cases/:caseId`
 - `GET /api/operations/summary`
 - `GET /healthz`
@@ -94,6 +98,7 @@ Default runtime port: `4020`
 - `CLINICIAN_APPROVED`
 - `CHANGES_REQUESTED`
 - `REJECTED`
+- `FINALIZED`
 
 The status model is intentionally narrow and never implies medical finality.
 
@@ -112,7 +117,7 @@ The status model is intentionally narrow and never implies medical finality.
 
 This standalone repository keeps its design, scope, and evidence surfaces locally.
 
-The current documentation set is a normalized March 30, 2026 snapshot prepared so the project can move independently from the parent monorepo.
+The current documentation set is a normalized March 31, 2026 snapshot prepared so the project can move independently from the parent monorepo.
 
 ## Claim Boundary
 
@@ -153,4 +158,4 @@ The server applies the following hardening defaults:
 ## Known Limitations
 
 - **No PII encryption at transit.** HTTPS must be enforced at the reverse-proxy layer for any deployment beyond localhost.
-- **No audit trail.** Write operations are not yet logged as an auditable event stream. The roadmap includes packet finalization and an explicit audit trail in a future phase.
+- **No bounded document-ingestion seam.** Source artifacts are still manually entered summaries rather than parsed uploads or OCR-derived records.

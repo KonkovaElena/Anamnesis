@@ -1,8 +1,8 @@
 ---
 title: "Personal Doctor Standalone Design"
 status: active
-version: "0.5.0"
-last_updated: "2026-04-01"
+version: "0.7.0"
+last_updated: "2026-03-31"
 tags: [personal-doctor, healthcare, standalone, explanation]
 ---
 
@@ -21,6 +21,8 @@ The standalone therefore keeps only the lowest-risk slice that is still useful:
 - organize intake;
 - register supporting artifacts;
 - draft a physician packet from current case data;
+- record explicit clinician review and packet finalization;
+- retain append-only audit history per case;
 - expose a compact operational surface.
 
 ## Runtime Thesis
@@ -30,6 +32,7 @@ The project should earn any future medical positioning through explicit workflow
 ## Current Storage And Composition
 
 - durable SQLite persistence with AES-256-GCM whole-record encryption at rest;
+- append-only audit trail storage paired with the case store;
 - in-memory fallback when `STORE_PATH` is not configured;
 - explicit bootstrap seam in `src/bootstrap.ts`;
 - reduced Domain -> Application -> Infrastructure split;
@@ -50,6 +53,7 @@ That means terms such as multi-agent orchestration, evidence engine, FHIR-compat
 ## Current Safety Posture
 
 - every packet is labeled as a draft for clinician review;
+- packet finalization is workflow finality only, not medical finality;
 - no route returns a diagnosis or treatment recommendation;
 - the status model is operational only, not clinical;
 - the docs separate implemented behavior from evidence and roadmap material.

@@ -8,6 +8,7 @@ import {
   createCase,
   addArtifact,
   draftPhysicianPacket,
+  finalizePhysicianPacket,
   submitReview,
   type PersonalDoctorCase,
 } from "../src/domain/personal-doctor";
@@ -149,6 +150,29 @@ test("submitReview rejects review on an already-approved packet", () => {
       }),
     (error: Error & { code?: string }) => {
       assert.equal(error.code, "packet_already_approved");
+      return true;
+    },
+  );
+});
+
+test("submitReview rejects review on a finalized packet", () => {
+  const { record, packetId } = seedCaseWithPacket();
+  const approved = submitReview(record, packetId, {
+    reviewerName: "Dr. Noether",
+    action: "approved",
+  });
+  const finalized = finalizePhysicianPacket(approved.nextCase, packetId, {
+    finalizedBy: "Dr. Noether",
+  });
+
+  assert.throws(
+    () =>
+      submitReview(finalized.nextCase, packetId, {
+        reviewerName: "Dr. Turing",
+        action: "changes_requested",
+      }),
+    (error: Error & { code?: string }) => {
+      assert.equal(error.code, "packet_already_finalized");
       return true;
     },
   );

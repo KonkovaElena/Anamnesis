@@ -1,8 +1,8 @@
 ---
 title: "Personal Doctor Roadmap And Validation"
 status: active
-version: "0.6.0"
-last_updated: "2026-04-01"
+version: "0.7.0"
+last_updated: "2026-03-31"
 tags: [personal-doctor, healthcare, roadmap, validation]
 ---
 
@@ -25,8 +25,14 @@ Then verify:
 
 ## Next Logical Expansions
 
-1. packet finalization and audit trail;
-2. bounded document-ingestion seam.
+1. bounded document-ingestion seam.
+
+## Completed In v0.7.0
+
+- packet finalization for clinician-approved, non-stale packets;
+- append-only audit trail for case creation, artifact add/remove, packet draft, review submit, finalize, and delete flows;
+- audit-aware operations summary and `/metrics` counters;
+- SQLite audit history retention across restarts and case deletion.
 
 ## Completed In v0.6.0
 
@@ -57,7 +63,7 @@ Then verify:
 | Future phase | Capability examples | Minimum gate before public scope changes |
 | --- | --- | --- |
 | Phase 2 - Intake plus documents | richer interview flow, typed artifact normalization, OCR or document ingestion, FHIR-compatible import seams | representative fixtures, updated parent evidence docs, code and tests for the new seam, explicit interoperability boundary, review-visible workflow state |
-| Phase 3 - Clinician decision support | triage draft, evidence engine, review ledger, audit trail, retrieval-backed packet enrichment, bounded orchestrator loop | task-local evaluation, explicit clinician-review boundary, auditability, deterministic validation rules, updated claim-boundary docs |
+| Phase 3 - Clinician decision support | triage draft, evidence engine, retrieval-backed packet enrichment, bounded orchestrator loop | task-local evaluation, explicit clinician-review boundary, auditability, deterministic validation rules, updated claim-boundary docs |
 | Phase 4 - Multimodal and specialist expansion | imaging, genomics and omics evidence, wearables, specialist routing, candidate agent-native patient graph | modality-specific governance, dedicated validation docs, stronger data controls, revised regulatory positioning, separate adoption decision per subsystem |
 
 ## Non-Upgrade Rule

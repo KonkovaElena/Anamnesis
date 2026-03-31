@@ -1,9 +1,18 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 export type CaseStatus = "INTAKING" | "READY_FOR_PACKET" | "REVIEW_REQUIRED";
 export type ArtifactType = "note" | "lab" | "summary" | "report" | "imaging-summary";
-export type PhysicianPacketStatus = "DRAFT_REVIEW_REQUIRED" | "CLINICIAN_APPROVED" | "CHANGES_REQUESTED" | "REJECTED";
+export type PhysicianPacketStatus = "DRAFT_REVIEW_REQUIRED" | "CLINICIAN_APPROVED" | "CHANGES_REQUESTED" | "REJECTED" | "FINALIZED";
 export type ReviewAction = "approved" | "changes_requested" | "rejected";
+export type AuditEventType =
+  | "case.created"
+  | "artifact.added"
+  | "artifact.removed"
+  | "packet.drafted"
+  | "review.submitted"
+  | "packet.finalized"
+  | "case.deleted";
+export type AuditEventOutcome = "success";
 
 export interface CaseIntake {
   chiefConcern: string;
@@ -53,11 +62,20 @@ export interface PhysicianPacket {
   artifactIds: string[];
   sections: PhysicianPacketSection[];
   reviews: ClinicalReviewEntry[];
+  finalizedAt?: string;
+  finalizedBy?: string;
+  finalizationReason?: string;
+  finalizedFingerprint?: string;
 }
 
 export interface CreatePhysicianPacketInput {
   requestedBy?: string;
   focus?: string;
+}
+
+export interface FinalizePacketInput {
+  finalizedBy: string;
+  reason?: string;
 }
 
 export interface ClinicalReviewEntry {
@@ -72,6 +90,19 @@ export interface SubmitReviewInput {
   reviewerName: string;
   action: ReviewAction;
   comments?: string;
+}
+
+export interface AuditEventRecord {
+  auditId: string;
+  caseId: string;
+  packetId?: string;
+  eventType: AuditEventType;
+  action: string;
+  occurredAt: string;
+  recordedAt: string;
+  actorId?: string;
+  outcome: AuditEventOutcome;
+  details?: Record<string, string | number | boolean | null>;
 }
 
 export interface PersonalDoctorCase {
@@ -90,6 +121,8 @@ export interface OperationsSummary {
   totalArtifacts: number;
   totalPackets: number;
   totalReviews: number;
+  totalFinalizedPackets: number;
+  totalAuditEvents: number;
   statusCounts: Record<CaseStatus, number>;
   lastUpdatedAt: string | null;
 }
@@ -99,6 +132,12 @@ export interface PersonalDoctorStore {
   getCase(caseId: string): Promise<PersonalDoctorCase | undefined>;
   saveCase(nextCase: PersonalDoctorCase): Promise<void>;
   deleteCase(caseId: string): Promise<boolean>;
+}
+
+export interface AuditTrailStore {
+  append(event: AuditEventRecord): Promise<void>;
+  listByCase(caseId: string): Promise<AuditEventRecord[]>;
+  countEvents(): Promise<number>;
 }
 
 export class PersonalDoctorDomainError extends Error {
@@ -117,6 +156,32 @@ const PACKET_DISCLAIMER =
 
 function toIso(now: Date): string {
   return now.toISOString();
+}
+
+function buildPacketFingerprint(record: PersonalDoctorCase, packet: PhysicianPacket): string {
+  const snapshot = {
+    caseId: record.caseId,
+    packetId: packet.packetId,
+    createdAt: packet.createdAt,
+    requestedBy: packet.requestedBy ?? null,
+    focus: packet.focus ?? null,
+    disclaimer: packet.disclaimer,
+    title: packet.title,
+    artifactIds: [...packet.artifactIds],
+    sections: packet.sections.map((section) => ({
+      label: section.label,
+      content: section.content,
+    })),
+    reviews: packet.reviews.map((review) => ({
+      reviewId: review.reviewId,
+      reviewerName: review.reviewerName,
+      action: review.action,
+      comments: review.comments ?? null,
+      createdAt: review.createdAt,
+    })),
+  };
+
+  return createHash("sha256").update(JSON.stringify(snapshot)).digest("hex");
 }
 
 export function createCase(input: CreateCaseInput, now = new Date()): PersonalDoctorCase {
@@ -297,7 +362,10 @@ export function removeArtifact(
   };
 }
 
-export function buildOperationsSummary(cases: PersonalDoctorCase[]): OperationsSummary {
+export function buildOperationsSummary(
+  cases: PersonalDoctorCase[],
+  options?: { totalAuditEvents?: number },
+): OperationsSummary {
   const statusCounts: Record<CaseStatus, number> = {
     INTAKING: 0,
     READY_FOR_PACKET: 0,
@@ -307,6 +375,7 @@ export function buildOperationsSummary(cases: PersonalDoctorCase[]): OperationsS
   let totalArtifacts = 0;
   let totalPackets = 0;
   let totalReviews = 0;
+  let totalFinalizedPackets = 0;
   let lastUpdatedAt: string | null = null;
 
   for (const record of cases) {
@@ -315,6 +384,9 @@ export function buildOperationsSummary(cases: PersonalDoctorCase[]): OperationsS
     totalPackets += record.physicianPackets.length;
     for (const packet of record.physicianPackets) {
       totalReviews += packet.reviews.length;
+      if (packet.status === "FINALIZED") {
+        totalFinalizedPackets += 1;
+      }
     }
     if (lastUpdatedAt === null || record.updatedAt > lastUpdatedAt) {
       lastUpdatedAt = record.updatedAt;
@@ -326,8 +398,30 @@ export function buildOperationsSummary(cases: PersonalDoctorCase[]): OperationsS
     totalArtifacts,
     totalPackets,
     totalReviews,
+    totalFinalizedPackets,
+    totalAuditEvents: options?.totalAuditEvents ?? 0,
     statusCounts,
     lastUpdatedAt,
+  };
+}
+
+export function createAuditEvent(
+  input: Omit<AuditEventRecord, "auditId" | "recordedAt" | "outcome"> & {
+    outcome?: AuditEventOutcome;
+  },
+  now = new Date(),
+): AuditEventRecord {
+  return {
+    auditId: randomUUID(),
+    caseId: input.caseId,
+    packetId: input.packetId,
+    eventType: input.eventType,
+    action: input.action,
+    occurredAt: input.occurredAt,
+    recordedAt: toIso(now),
+    actorId: input.actorId,
+    outcome: input.outcome ?? "success",
+    details: input.details,
   };
 }
 
@@ -362,6 +456,14 @@ export function submitReview(
     );
   }
 
+  if (packet.status === "FINALIZED") {
+    throw new PersonalDoctorDomainError(
+      "packet_already_finalized",
+      409,
+      "Cannot review a packet that has already been finalized.",
+    );
+  }
+
   const review: ClinicalReviewEntry = {
     reviewId: randomUUID(),
     reviewerName: input.reviewerName,
@@ -384,6 +486,69 @@ export function submitReview(
     nextCase: {
       ...record,
       updatedAt: toIso(now),
+      physicianPackets: updatedPackets,
+    },
+  };
+}
+
+export function finalizePhysicianPacket(
+  record: PersonalDoctorCase,
+  packetId: string,
+  input: FinalizePacketInput,
+  now = new Date(),
+): { nextCase: PersonalDoctorCase; packet: PhysicianPacket } {
+  const packetIndex = record.physicianPackets.findIndex((packet) => packet.packetId === packetId);
+  if (packetIndex === -1) {
+    throw new PersonalDoctorDomainError(
+      "packet_not_found",
+      404,
+      "Physician packet not found.",
+    );
+  }
+
+  const packet = record.physicianPackets[packetIndex]!;
+  if (packet.status === "FINALIZED") {
+    throw new PersonalDoctorDomainError(
+      "packet_already_finalized",
+      409,
+      "Packet has already been finalized.",
+    );
+  }
+
+  if (packet.isStale) {
+    throw new PersonalDoctorDomainError(
+      "packet_stale",
+      409,
+      "Packet must be regenerated before finalization because it is stale.",
+    );
+  }
+
+  if (packet.status !== "CLINICIAN_APPROVED") {
+    throw new PersonalDoctorDomainError(
+      "packet_not_ready_for_finalization",
+      409,
+      "Only clinician-approved packets can be finalized.",
+    );
+  }
+
+  const finalizedAt = toIso(now);
+  const updatedPacket: PhysicianPacket = {
+    ...packet,
+    status: "FINALIZED",
+    finalizedAt,
+    finalizedBy: input.finalizedBy,
+    finalizationReason: input.reason,
+    finalizedFingerprint: buildPacketFingerprint(record, packet),
+  };
+
+  const updatedPackets = [...record.physicianPackets];
+  updatedPackets[packetIndex] = updatedPacket;
+
+  return {
+    packet: updatedPacket,
+    nextCase: {
+      ...record,
+      updatedAt: finalizedAt,
       physicianPackets: updatedPackets,
     },
   };

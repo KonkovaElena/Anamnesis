@@ -5,6 +5,7 @@ import { type AddressInfo } from "node:net";
 import test from "node:test";
 import { createApp } from "../src/application/create-app";
 import { createAuthMiddleware } from "../src/application/auth-middleware";
+import { InMemoryAuditTrailStore } from "../src/infrastructure/InMemoryAuditTrailStore";
 import { InMemoryPersonalDoctorStore } from "../src/infrastructure/InMemoryPersonalDoctorStore";
 
 const TEST_API_KEY = "test-secret-key-for-auth-tests";
@@ -14,6 +15,7 @@ async function withAuthServer(
   run: (baseUrl: string) => Promise<void>,
 ) {
   const store = new InMemoryPersonalDoctorStore();
+  const auditStore = new InMemoryAuditTrailStore();
   const authMiddleware = apiKey
     ? createAuthMiddleware({
         apiKey,
@@ -21,7 +23,7 @@ async function withAuthServer(
       })
     : undefined;
 
-  const app = createApp({ store, authMiddleware });
+  const app = createApp({ store, auditStore, authMiddleware });
   const server = createServer(app);
   server.listen(0, "127.0.0.1");
   await once(server, "listening");

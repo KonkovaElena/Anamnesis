@@ -1,8 +1,8 @@
 ---
 title: "Personal Doctor Scope Lock"
 status: active
-version: "0.6.0"
-last_updated: "2026-04-01"
+version: "0.7.0"
+last_updated: "2026-03-31"
 tags: [personal-doctor, healthcare, scope-lock, reference]
 ---
 
@@ -14,6 +14,9 @@ tags: [personal-doctor, healthcare, scope-lock, reference]
 - source artifact registration (with future-date rejection);
 - artifact and case deletion;
 - physician packet draft generation;
+- explicit clinician review ledger;
+- physician packet finalization;
+- append-only audit trail;
 - operations summary;
 - health, readiness, and metrics surfaces;
 - Bearer-token authentication;

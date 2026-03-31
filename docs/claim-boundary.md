@@ -1,8 +1,8 @@
 ---
 title: "Personal Doctor Claim Boundary"
 status: active
-version: "0.6.0"
-last_updated: "2026-04-01"
+version: "0.7.0"
+last_updated: "2026-03-31"
 tags: [personal-doctor, healthcare, claim-boundary, reference]
 ---
 
@@ -14,6 +14,9 @@ tags: [personal-doctor, healthcare, claim-boundary, reference]
 - it registers source artifacts (with future-date rejection);
 - it supports artifact and case deletion;
 - it drafts physician packets from currently stored case data;
+- it records explicit clinician reviews on physician packets;
+- it finalizes clinician-approved packets as workflow artifacts;
+- it writes append-only audit events for write operations;
 - it exposes an operational HTTP surface;
 - it enforces Bearer-token authentication;
 - it applies per-IP sliding-window rate limiting;
@@ -26,7 +29,7 @@ tags: [personal-doctor, healthcare, claim-boundary, reference]
 - triage verdict generation;
 - treatment planning;
 - prescription logic;
-- clinician sign-off tracking.
+- medical sign-off or legal attestation.
 
 ## Required Language
 

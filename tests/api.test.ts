@@ -346,6 +346,91 @@ test("operations summary and metrics reflect the live in-memory state", async ()
   });
 });
 
+test("operations summary and metrics expose review, finalization, and audit counters", async () => {
+  await withServer(async (baseUrl) => {
+    const createResponse = await jsonRequest<{ case: { caseId: string } }>(baseUrl, "/api/cases", {
+      method: "POST",
+      body: {
+        patientLabel: "case-summary-counters",
+        intake: {
+          chiefConcern: "Intermittent palpitations",
+          symptomSummary: "Palpitations after exertion during the last week.",
+          historySummary: "No arrhythmia diagnosis in the current record.",
+          questionsForClinician: ["Should ambulatory monitoring be considered?"],
+        },
+      },
+    });
+    const caseId = createResponse.body.case.caseId;
+
+    await jsonRequest(baseUrl, `/api/cases/${caseId}/artifacts`, {
+      method: "POST",
+      body: {
+        artifactType: "summary",
+        title: "Home symptom summary",
+        summary: "Patient logged exertional palpitations for five days.",
+      },
+    });
+
+    const packetResponse = await jsonRequest<{ packet: { packetId: string } }>(
+      baseUrl,
+      `/api/cases/${caseId}/physician-packets`,
+      {
+        method: "POST",
+        body: {
+          requestedBy: "triage@example.test",
+        },
+      },
+    );
+    const packetId = packetResponse.body.packet.packetId;
+
+    await jsonRequest(baseUrl, `/api/cases/${caseId}/physician-packets/${packetId}/reviews`, {
+      method: "POST",
+      body: {
+        reviewerName: "Dr. Review",
+        action: "approved",
+        comments: "Complete for downstream handoff.",
+      },
+    });
+
+    await jsonRequest(baseUrl, `/api/cases/${caseId}/physician-packets/${packetId}/finalize`, {
+      method: "POST",
+      body: {
+        finalizedBy: "Dr. Review",
+        reason: "Workflow finalization for clinician handoff.",
+      },
+    });
+
+    const summaryResponse = await jsonRequest<{
+      summary: {
+        totalCases: number;
+        totalArtifacts: number;
+        totalPackets: number;
+        totalReviews: number;
+        totalFinalizedPackets: number;
+        totalAuditEvents: number;
+        statusCounts: Record<string, number>;
+      };
+    }>(baseUrl, "/api/operations/summary");
+
+    assert.equal(summaryResponse.status, 200);
+    assert.equal(summaryResponse.body.summary.totalCases, 1);
+    assert.equal(summaryResponse.body.summary.totalArtifacts, 1);
+    assert.equal(summaryResponse.body.summary.totalPackets, 1);
+    assert.equal(summaryResponse.body.summary.totalReviews, 1);
+    assert.equal(summaryResponse.body.summary.totalFinalizedPackets, 1);
+    assert.equal(summaryResponse.body.summary.totalAuditEvents, 5);
+    assert.equal(summaryResponse.body.summary.statusCounts.REVIEW_REQUIRED, 1);
+
+    const metricsResponse = await fetch(`${baseUrl}/metrics`);
+    const metricsText = await metricsResponse.text();
+
+    assert.equal(metricsResponse.status, 200);
+    assert.match(metricsText, /personal_doctor_reviews_total 1/);
+    assert.match(metricsText, /personal_doctor_finalized_packets_total 1/);
+    assert.match(metricsText, /personal_doctor_audit_events_total 5/);
+  });
+});
+
 test("responses include security headers", async () => {
   await withServer(async (baseUrl) => {
     const response = await fetch(`${baseUrl}/healthz`);

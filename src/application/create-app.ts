@@ -3,15 +3,19 @@ import express, { type NextFunction, type Request, type Response } from "express
 import helmet from "helmet";
 import { ZodError, z } from "zod";
 import {
+  type AuditTrailStore,
+  type OperationsSummary,
   PersonalDoctorDomainError,
   type PersonalDoctorCase,
   type PersonalDoctorStore,
   addArtifact,
   buildOperationsSummary,
-  submitReview,
+  createAuditEvent,
   createCase,
   draftPhysicianPacket,
+  finalizePhysicianPacket,
   removeArtifact,
+  submitReview,
 } from "../domain/personal-doctor";
 
 const createCaseSchema = z.strictObject({
@@ -58,8 +62,14 @@ const submitReviewSchema = z.strictObject({
   comments: z.string().trim().min(1).max(4000).optional(),
 });
 
+const finalizePacketSchema = z.strictObject({
+  finalizedBy: z.string().trim().min(1).max(120),
+  reason: z.string().trim().min(1).max(4000).optional(),
+});
+
 interface CreateAppDependencies {
   store: PersonalDoctorStore;
+  auditStore: AuditTrailStore;
   isShuttingDown?: () => boolean;
   authMiddleware?: (request: Request, response: Response, next: NextFunction) => void;
   rateLimitRpm?: number;
@@ -80,8 +90,16 @@ function isMalformedJsonError(
   return candidate.status === 400 && candidate.type === "entity.parse.failed";
 }
 
-function renderMetrics(cases: PersonalDoctorCase[]): string {
-  const summary = buildOperationsSummary(cases);
+async function loadOperationsSummary(
+  store: PersonalDoctorStore,
+  auditStore: AuditTrailStore,
+): Promise<OperationsSummary> {
+  const cases = await store.listCases();
+  const totalAuditEvents = await auditStore.countEvents();
+  return buildOperationsSummary(cases, { totalAuditEvents });
+}
+
+function renderMetrics(summary: OperationsSummary): string {
   const lines = [
     "# HELP personal_doctor_cases_total Total number of personal doctor cases.",
     "# TYPE personal_doctor_cases_total gauge",
@@ -95,6 +113,12 @@ function renderMetrics(cases: PersonalDoctorCase[]): string {
     "# HELP personal_doctor_reviews_total Total number of clinician review entries.",
     "# TYPE personal_doctor_reviews_total gauge",
     `personal_doctor_reviews_total ${summary.totalReviews}`,
+    "# HELP personal_doctor_finalized_packets_total Total number of finalized physician packets.",
+    "# TYPE personal_doctor_finalized_packets_total gauge",
+    `personal_doctor_finalized_packets_total ${summary.totalFinalizedPackets}`,
+    "# HELP personal_doctor_audit_events_total Total number of audit trail events.",
+    "# TYPE personal_doctor_audit_events_total gauge",
+    `personal_doctor_audit_events_total ${summary.totalAuditEvents}`,
     "# HELP personal_doctor_cases_by_status Total cases by workflow status.",
     "# TYPE personal_doctor_cases_by_status gauge",
   ];
@@ -106,7 +130,7 @@ function renderMetrics(cases: PersonalDoctorCase[]): string {
   return `${lines.join("\n")}\n`;
 }
 
-export function createApp({ store, isShuttingDown, authMiddleware, rateLimitRpm }: CreateAppDependencies) {
+export function createApp({ store, auditStore, isShuttingDown, authMiddleware, rateLimitRpm }: CreateAppDependencies) {
   const app = express();
   const parseJson = express.json({ limit: "256kb" });
 
@@ -149,6 +173,17 @@ export function createApp({ store, isShuttingDown, authMiddleware, rateLimitRpm 
     const input = createCaseSchema.parse(request.body ?? {});
     const record = createCase(input);
     await store.saveCase(record);
+    await auditStore.append(
+      createAuditEvent({
+        caseId: record.caseId,
+        eventType: "case.created",
+        action: "create_case",
+        occurredAt: record.createdAt,
+        details: {
+          hasPatientLabel: Boolean(record.patientLabel),
+        },
+      }),
+    );
     response.status(201).json({ case: record });
   });
 
@@ -188,6 +223,19 @@ export function createApp({ store, isShuttingDown, authMiddleware, rateLimitRpm 
     const input = addArtifactSchema.parse(request.body ?? {});
     const nextCase = addArtifact(record, input);
     await store.saveCase(nextCase);
+    const artifact = nextCase.artifacts.at(-1);
+    await auditStore.append(
+      createAuditEvent({
+        caseId: nextCase.caseId,
+        eventType: "artifact.added",
+        action: "add_artifact",
+        occurredAt: artifact?.createdAt ?? nextCase.updatedAt,
+        details: {
+          artifactType: artifact?.artifactType ?? input.artifactType,
+          hasSourceDate: Boolean(artifact?.sourceDate ?? input.sourceDate),
+        },
+      }),
+    );
     response.status(201).json({ case: nextCase });
   });
 
@@ -204,6 +252,20 @@ export function createApp({ store, isShuttingDown, authMiddleware, rateLimitRpm 
     const input = createPacketSchema.parse(request.body ?? {});
     const result = draftPhysicianPacket(record, input);
     await store.saveCase(result.nextCase);
+    await auditStore.append(
+      createAuditEvent({
+        caseId: result.nextCase.caseId,
+        packetId: result.packet.packetId,
+        eventType: "packet.drafted",
+        action: "draft_packet",
+        occurredAt: result.packet.createdAt,
+        actorId: result.packet.requestedBy,
+        details: {
+          artifactCount: result.packet.artifactIds.length,
+          hasFocus: Boolean(result.packet.focus),
+        },
+      }),
+    );
     response.status(201).json({
       case: result.nextCase,
       packet: result.packet,
@@ -242,8 +304,56 @@ export function createApp({ store, isShuttingDown, authMiddleware, rateLimitRpm 
     const input = submitReviewSchema.parse(request.body ?? {});
     const result = submitReview(record, packetId, input);
     await store.saveCase(result.nextCase);
+    await auditStore.append(
+      createAuditEvent({
+        caseId: result.nextCase.caseId,
+        packetId,
+        eventType: "review.submitted",
+        action: "submit_review",
+        occurredAt: result.review.createdAt,
+        actorId: result.review.reviewerName,
+        details: {
+          reviewAction: result.review.action,
+          hasComments: Boolean(result.review.comments),
+        },
+      }),
+    );
     response.status(201).json({
       review: result.review,
+    });
+  });
+
+  app.post("/api/cases/:caseId/physician-packets/:packetId/finalize", parseJson, async (request, response) => {
+    const record = await store.getCase(readRouteParam(request.params.caseId));
+    if (!record) {
+      response.status(404).json({
+        code: "case_not_found",
+        message: "Case not found.",
+      });
+      return;
+    }
+
+    const packetId = readRouteParam(request.params.packetId);
+    const input = finalizePacketSchema.parse(request.body ?? {});
+    const result = finalizePhysicianPacket(record, packetId, input);
+    await store.saveCase(result.nextCase);
+    await auditStore.append(
+      createAuditEvent({
+        caseId: result.nextCase.caseId,
+        packetId,
+        eventType: "packet.finalized",
+        action: "finalize_packet",
+        occurredAt: result.packet.finalizedAt ?? result.nextCase.updatedAt,
+        actorId: result.packet.finalizedBy,
+        details: {
+          hasReason: Boolean(result.packet.finalizationReason),
+          fingerprint: result.packet.finalizedFingerprint ?? null,
+        },
+      }),
+    );
+    response.json({
+      case: result.nextCase,
+      packet: result.packet,
     });
   });
 
@@ -276,10 +386,20 @@ export function createApp({ store, isShuttingDown, authMiddleware, rateLimitRpm 
     });
   });
 
-  app.get("/api/operations/summary", async (_request, response) => {
-    const cases = await store.listCases();
+  app.get("/api/cases/:caseId/audit-events", async (request, response) => {
+    const caseId = readRouteParam(request.params.caseId);
+    const events = await auditStore.listByCase(caseId);
     response.json({
-      summary: buildOperationsSummary(cases),
+      events,
+      meta: {
+        totalEvents: events.length,
+      },
+    });
+  });
+
+  app.get("/api/operations/summary", async (_request, response) => {
+    response.json({
+      summary: await loadOperationsSummary(store, auditStore),
     });
   });
 
@@ -305,14 +425,29 @@ export function createApp({ store, isShuttingDown, authMiddleware, rateLimitRpm 
       return;
     }
 
-    const nextCase = removeArtifact(record, readRouteParam(request.params.artifactId));
+    const artifactId = readRouteParam(request.params.artifactId);
+    const removedArtifact = record.artifacts.find((artifact) => artifact.artifactId === artifactId);
+    const nextCase = removeArtifact(record, artifactId);
     await store.saveCase(nextCase);
+    await auditStore.append(
+      createAuditEvent({
+        caseId: nextCase.caseId,
+        eventType: "artifact.removed",
+        action: "remove_artifact",
+        occurredAt: nextCase.updatedAt,
+        details: {
+          artifactId,
+          artifactType: removedArtifact?.artifactType ?? "unknown",
+        },
+      }),
+    );
     response.json({ case: nextCase });
   });
 
   app.delete("/api/cases/:caseId", async (request, response) => {
-    const deleted = await store.deleteCase(readRouteParam(request.params.caseId));
-    if (!deleted) {
+    const caseId = readRouteParam(request.params.caseId);
+    const record = await store.getCase(caseId);
+    if (!record) {
       response.status(404).json({
         code: "case_not_found",
         message: "Case not found.",
@@ -320,12 +455,26 @@ export function createApp({ store, isShuttingDown, authMiddleware, rateLimitRpm 
       return;
     }
 
+    await store.deleteCase(caseId);
+    await auditStore.append(
+      createAuditEvent({
+        caseId,
+        eventType: "case.deleted",
+        action: "delete_case",
+        occurredAt: new Date().toISOString(),
+        details: {
+          artifactCount: record.artifacts.length,
+          packetCount: record.physicianPackets.length,
+        },
+      }),
+    );
+
     response.status(204).end();
   });
 
   app.get("/metrics", async (_request, response) => {
-    const cases = await store.listCases();
-    response.type("text/plain").send(renderMetrics(cases));
+    const summary = await loadOperationsSummary(store, auditStore);
+    response.type("text/plain").send(renderMetrics(summary));
   });
 
   app.use((_request, response) => {

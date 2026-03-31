@@ -1,8 +1,8 @@
 ---
 title: "Personal Doctor Architecture Overview"
 status: active
-version: "0.6.0"
-last_updated: "2026-04-01"
+version: "0.7.0"
+last_updated: "2026-03-31"
 tags: [personal-doctor, healthcare, architecture, reference]
 ---
 
@@ -19,7 +19,9 @@ The current standalone uses a reduced runtime chain:
 - `src/application/rate-limiter.ts`
 - `src/domain/personal-doctor.ts`
 - `src/infrastructure/InMemoryPersonalDoctorStore.ts`
+- `src/infrastructure/InMemoryAuditTrailStore.ts`
 - `src/infrastructure/SqlitePersonalDoctorStore.ts`
+- `src/infrastructure/SqliteAuditTrailStore.ts`
 - `src/infrastructure/encryption.ts`
 - `src/graceful-shutdown.ts`
 
@@ -27,13 +29,13 @@ The current standalone uses a reduced runtime chain:
 
 | Layer | Responsibility in this slice |
 | --- | --- |
-| Domain | case workflow state, artifact model, physician packet draft model |
-| Application | HTTP routes, request validation, response contracts, error mapping, auth middleware, rate limiting |
-| Infrastructure | durable SQLite persistence with AES-256-GCM encryption at rest; in-memory fallback |
+| Domain | case workflow state, artifact model, physician packet draft/review/finalization model, audit event model |
+| Application | HTTP routes, request validation, response contracts, error mapping, auth middleware, rate limiting, metrics |
+| Infrastructure | durable SQLite persistence with AES-256-GCM encryption at rest, append-only audit persistence, in-memory fallbacks |
 
 ## Deliberately Missing
 - document parsing pipeline;
-- clinician review ledger;
+- external audit export or tamper-evident signatures;
 - event publishing;
 - async workers;
 - diagnostic reasoning layer.
