@@ -1,7 +1,7 @@
 ---
 title: "Personal Doctor Standalone Design"
 status: active
-version: "0.8.0"
+version: "0.9.0"
 last_updated: "2026-03-31"
 tags: [personal-doctor, healthcare, standalone, explanation]
 ---
@@ -35,6 +35,7 @@ The project should earn any future medical positioning through explicit workflow
 - durable SQLite persistence with AES-256-GCM whole-record encryption at rest;
 - append-only audit trail storage paired with the case store;
 - JSON-only document-ingestion seam for `text/plain` and `text/markdown` content;
+- bounded FHIR-compatible import seam for inline `Binary` and `DocumentReference` resources carrying `text/plain` or `text/markdown` payloads;
 - in-memory fallback when `STORE_PATH` is not configured;
 - explicit bootstrap seam in `src/bootstrap.ts`;
 - reduced Domain -> Application -> Infrastructure split;
@@ -50,7 +51,7 @@ The broader future-phase architecture for this project is normalized into this s
 
 These surfaces capture the March 30, 2026 authority snapshot in standalone form so the project can be reviewed, transferred, and evolved without requiring the parent monorepo.
 
-That means terms such as multi-agent orchestration, evidence engine, FHIR-compatible data seams, multipart upload handling, OCR, governance layer, or agent-native patient graph remain roadmap concepts until this standalone gains matching code and verification.
+That means terms such as multi-agent orchestration, evidence engine, multipart upload handling, OCR, FHIR Bundle import, external attachment dereference, governance layer, or agent-native patient graph remain roadmap concepts until this standalone gains matching code and verification.
 
 ## Current Safety Posture
 

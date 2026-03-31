@@ -1,7 +1,7 @@
 ---
 title: "Personal Doctor API Scope"
 status: active
-version: "0.8.0"
+version: "0.9.0"
 last_updated: "2026-03-31"
 tags: [personal-doctor, healthcare, api-scope, reference]
 ---
@@ -15,6 +15,7 @@ tags: [personal-doctor, healthcare, api-scope, reference]
 - `GET /api/cases/:caseId`
 - `POST /api/cases/:caseId/artifacts`
 - `POST /api/cases/:caseId/document-ingestions`
+- `POST /api/cases/:caseId/fhir-imports`
 - `DELETE /api/cases/:caseId/artifacts/:artifactId`
 - `POST /api/cases/:caseId/physician-packets`
 - `GET /api/cases/:caseId/physician-packets`
@@ -48,3 +49,13 @@ The API is a workflow and packeting surface. It is not a diagnostic API.
 - request body stays JSON-based;
 - normalized text is converted into a bounded source-artifact summary;
 - multipart uploads, OCR, and full FHIR resource parsing are out of scope.
+
+## FHIR Import Boundary
+
+`POST /api/cases/:caseId/fhir-imports` is intentionally bounded.
+
+- request body stays JSON-based and wraps a FHIR JSON resource object;
+- supported resource types: `Binary`, `DocumentReference`;
+- supported inline document media types: `text/plain`, `text/markdown`;
+- imports reuse the bounded source-artifact summary pipeline and do not create a FHIR repository;
+- Bundle handling, generic FHIR transactions, and external `attachment.url` dereference are out of scope.

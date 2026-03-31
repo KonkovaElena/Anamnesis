@@ -1,7 +1,7 @@
 ---
 title: "Personal Doctor Status Model"
 status: active
-version: "0.8.0"
+version: "0.9.0"
 last_updated: "2026-03-31"
 tags: [personal-doctor, healthcare, status-model, reference]
 ---

@@ -1,7 +1,7 @@
 ---
 title: "Personal Doctor Roadmap And Validation"
 status: active
-version: "0.8.0"
+version: "0.9.0"
 last_updated: "2026-03-31"
 tags: [personal-doctor, healthcare, roadmap, validation]
 ---
@@ -25,7 +25,14 @@ Then verify:
 
 ## Next Logical Expansions
 
-1. FHIR-compatible import seam.
+1. FHIR document Bundle handling and attachment.url dereference under an explicit interoperability gate.
+
+## Completed In v0.9.0
+
+- bounded FHIR-compatible import seam at `POST /api/cases/:caseId/fhir-imports`;
+- support for inline `Binary` and `DocumentReference` resources carrying `text/plain` or `text/markdown` payloads;
+- reuse of the bounded text-normalization and excerpt pipeline for FHIR-derived artifacts;
+- dedicated `fhir.imported` audit event with route and domain coverage.
 
 ## Completed In v0.8.0
 

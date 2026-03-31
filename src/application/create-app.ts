@@ -13,6 +13,7 @@ import {
   createAuditEvent,
   createCase,
   draftPhysicianPacket,
+  ingestFhirResource,
   finalizePhysicianPacket,
   ingestDocument,
   removeArtifact,
@@ -61,6 +62,14 @@ const documentIngestionSchema = z.strictObject({
   filename: z.string().trim().min(1).max(160).optional(),
   sourceDate: sourceDateSchema.optional(),
   provenance: z.string().trim().min(1).max(300).optional(),
+});
+
+const fhirImportSchema = z.strictObject({
+  artifactType: z.enum(["note", "lab", "summary", "report", "imaging-summary"]).default("report"),
+  title: z.string().trim().min(1).max(200).optional(),
+  sourceDate: sourceDateSchema.optional(),
+  provenance: z.string().trim().min(1).max(300).optional(),
+  resource: z.record(z.string(), z.unknown()),
 });
 
 const createPacketSchema = z.strictObject({
@@ -283,6 +292,42 @@ export function createApp({ store, auditStore, isShuttingDown, authMiddleware, r
       case: result.nextCase,
       artifact: result.artifact,
       ingestion: result.ingestion,
+    });
+  });
+
+  app.post("/api/cases/:caseId/fhir-imports", parseJson, async (request, response) => {
+    const record = await store.getCase(readRouteParam(request.params.caseId));
+    if (!record) {
+      response.status(404).json({
+        code: "case_not_found",
+        message: "Case not found.",
+      });
+      return;
+    }
+
+    const input = fhirImportSchema.parse(request.body ?? {});
+    const result = ingestFhirResource(record, input);
+    await store.saveCase(result.nextCase);
+    await auditStore.append(
+      createAuditEvent({
+        caseId: result.nextCase.caseId,
+        eventType: "fhir.imported",
+        action: "import_fhir",
+        occurredAt: result.artifact.createdAt,
+        details: {
+          artifactType: result.artifact.artifactType,
+          resourceType: result.fhirImport.resourceType,
+          sourceContentType: result.fhirImport.sourceContentType,
+          truncated: result.ingestion.truncated,
+          normalizedCharacters: result.ingestion.normalizedCharacterCount,
+        },
+      }),
+    );
+    response.status(201).json({
+      case: result.nextCase,
+      artifact: result.artifact,
+      ingestion: result.ingestion,
+      fhirImport: result.fhirImport,
     });
   });
 

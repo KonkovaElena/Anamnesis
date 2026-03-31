@@ -3,6 +3,8 @@ import { createHash, randomUUID } from "node:crypto";
 export type CaseStatus = "INTAKING" | "READY_FOR_PACKET" | "REVIEW_REQUIRED";
 export type ArtifactType = "note" | "lab" | "summary" | "report" | "imaging-summary";
 export type DocumentContentType = "text/plain" | "text/markdown";
+export type FhirTransportContentType = "application/fhir+json";
+export type FhirImportResourceType = "Binary" | "DocumentReference";
 export type PhysicianPacketStatus = "DRAFT_REVIEW_REQUIRED" | "CLINICIAN_APPROVED" | "CHANGES_REQUESTED" | "REJECTED" | "FINALIZED";
 export type ReviewAction = "approved" | "changes_requested" | "rejected";
 export type AuditEventType =
@@ -10,6 +12,7 @@ export type AuditEventType =
   | "artifact.added"
   | "artifact.removed"
   | "document.ingested"
+  | "fhir.imported"
   | "packet.drafted"
   | "review.submitted"
   | "packet.finalized"
@@ -62,6 +65,22 @@ export interface DocumentIngestionResult {
   normalizedCharacterCount: number;
   excerptCharacterCount: number;
   truncated: boolean;
+}
+
+export interface FhirImportInput {
+  artifactType?: ArtifactType;
+  title?: string;
+  sourceDate?: string;
+  provenance?: string;
+  resource: Record<string, unknown>;
+}
+
+export interface FhirImportResult {
+  resourceType: FhirImportResourceType;
+  transportContentType: FhirTransportContentType;
+  sourceContentType: DocumentContentType;
+  title: string;
+  sourceDate?: string;
 }
 
 export interface PhysicianPacketSection {
@@ -174,6 +193,7 @@ export class PersonalDoctorDomainError extends Error {
 const PACKET_DISCLAIMER =
   "This physician packet is a draft organizational summary for clinician review. It is not a diagnosis, treatment recommendation, or prescription.";
 const DOCUMENT_EXCERPT_LIMIT = 4000;
+const UTF8_TEXT_DECODER = new TextDecoder("utf-8", { fatal: true });
 
 function toIso(now: Date): string {
   return now.toISOString();
@@ -220,6 +240,222 @@ function buildDocumentProvenance(input: IngestDocumentInput): string {
     parts.push(`filename:${input.filename}`);
   }
   return parts.join("; ").slice(0, 300);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readOptionalString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function parseDocumentContentType(value: string | undefined): DocumentContentType | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const baseContentType = value.split(";", 1)[0]?.trim().toLowerCase();
+  return baseContentType === "text/plain" || baseContentType === "text/markdown"
+    ? baseContentType
+    : undefined;
+}
+
+function deriveSourceDate(value: string | undefined): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const candidate = value.trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(candidate)) {
+    return undefined;
+  }
+
+  const parsed = new Date(`${candidate}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().startsWith(candidate)
+    ? candidate
+    : undefined;
+}
+
+function decodeBase64Utf8(value: string): string {
+  const normalized = value.replace(/\s+/g, "");
+  if (normalized.length === 0 || normalized.length % 4 === 1 || /[^A-Za-z0-9+/=]/.test(normalized)) {
+    throw new PersonalDoctorDomainError(
+      "fhir_import_invalid_base64",
+      400,
+      "FHIR import requires valid base64-encoded inline text data.",
+    );
+  }
+
+  const decoded = Buffer.from(normalized, "base64");
+  const roundTrip = decoded.toString("base64").replace(/=+$/u, "");
+  if (roundTrip !== normalized.replace(/=+$/u, "")) {
+    throw new PersonalDoctorDomainError(
+      "fhir_import_invalid_base64",
+      400,
+      "FHIR import requires valid base64-encoded inline text data.",
+    );
+  }
+
+  try {
+    return UTF8_TEXT_DECODER.decode(decoded);
+  } catch {
+    throw new PersonalDoctorDomainError(
+      "fhir_import_invalid_utf8",
+      400,
+      "FHIR import only accepts UTF-8 text attachments in this slice.",
+    );
+  }
+}
+
+function appendFhirProvenance(existing: string | undefined, resourceType: FhirImportResourceType): string {
+  return existing ? `${existing}; fhir-import:${resourceType}` : `fhir-import:${resourceType}`;
+}
+
+interface ParsedFhirImport {
+  artifactType: ArtifactType;
+  title: string;
+  sourceDate?: string;
+  provenance?: string;
+  resourceType: FhirImportResourceType;
+  sourceContentType: DocumentContentType;
+  textContent: string;
+}
+
+function parseBinaryImport(input: FhirImportInput): ParsedFhirImport {
+  const sourceContentType = parseDocumentContentType(readOptionalString(input.resource.contentType));
+  if (!sourceContentType) {
+    throw new PersonalDoctorDomainError(
+      "fhir_import_content_type_unsupported",
+      400,
+      "FHIR Binary import only supports text/plain or text/markdown content in this slice.",
+    );
+  }
+
+  const data = readOptionalString(input.resource.data);
+  if (!data) {
+    throw new PersonalDoctorDomainError(
+      "fhir_import_requires_inline_data",
+      400,
+      "FHIR import requires inline attachment data. External dereference is out of scope.",
+    );
+  }
+
+  return {
+    artifactType: input.artifactType ?? "report",
+    title: input.title ?? "FHIR Binary import",
+    sourceDate: input.sourceDate,
+    provenance: appendFhirProvenance(input.provenance, "Binary"),
+    resourceType: "Binary",
+    sourceContentType,
+    textContent: decodeBase64Utf8(data),
+  };
+}
+
+function parseDocumentReferenceImport(input: FhirImportInput): ParsedFhirImport {
+  const content = input.resource.content;
+  if (!Array.isArray(content) || content.length === 0) {
+    throw new PersonalDoctorDomainError(
+      "fhir_import_requires_inline_data",
+      400,
+      "FHIR import requires an inline text attachment on DocumentReference.content.",
+    );
+  }
+
+  let sawInlineData = false;
+  let sawExternalUrl = false;
+  let sawUnsupportedContentType = false;
+  let attachmentTitle: string | undefined;
+  let attachmentCreation: string | undefined;
+  let selectedContentType: DocumentContentType | undefined;
+  let selectedData: string | undefined;
+
+  for (const item of content) {
+    if (!isRecord(item) || !isRecord(item.attachment)) {
+      continue;
+    }
+
+    const attachment = item.attachment;
+    const attachmentContentType = parseDocumentContentType(readOptionalString(attachment.contentType));
+    const attachmentData = readOptionalString(attachment.data);
+    const attachmentUrl = readOptionalString(attachment.url);
+
+    attachmentTitle ??= readOptionalString(attachment.title);
+    attachmentCreation ??= readOptionalString(attachment.creation);
+
+    if (attachmentData) {
+      sawInlineData = true;
+    }
+    if (attachmentUrl) {
+      sawExternalUrl = true;
+    }
+    if (!attachmentContentType && (attachmentData || attachmentUrl)) {
+      sawUnsupportedContentType = true;
+    }
+
+    if (attachmentContentType && attachmentData) {
+      selectedContentType = attachmentContentType;
+      selectedData = attachmentData;
+      break;
+    }
+  }
+
+  if (!selectedContentType || !selectedData) {
+    if (sawUnsupportedContentType || sawInlineData) {
+      throw new PersonalDoctorDomainError(
+        "fhir_import_content_type_unsupported",
+        400,
+        "FHIR DocumentReference import only supports inline text/plain or text/markdown attachments in this slice.",
+      );
+    }
+
+    if (sawExternalUrl) {
+      throw new PersonalDoctorDomainError(
+        "fhir_import_requires_inline_data",
+        400,
+        "FHIR import requires inline attachment data. External dereference is out of scope.",
+      );
+    }
+
+    throw new PersonalDoctorDomainError(
+      "fhir_import_requires_inline_data",
+      400,
+      "FHIR import requires an inline text attachment on DocumentReference.content.",
+    );
+  }
+
+  return {
+    artifactType: input.artifactType ?? "report",
+    title:
+      input.title ??
+      readOptionalString(input.resource.description) ??
+      attachmentTitle ??
+      "FHIR DocumentReference import",
+    sourceDate:
+      input.sourceDate ??
+      deriveSourceDate(readOptionalString(input.resource.date)) ??
+      deriveSourceDate(attachmentCreation),
+    provenance: appendFhirProvenance(input.provenance, "DocumentReference"),
+    resourceType: "DocumentReference",
+    sourceContentType: selectedContentType,
+    textContent: decodeBase64Utf8(selectedData),
+  };
+}
+
+function parseFhirImport(input: FhirImportInput): ParsedFhirImport {
+  const resourceType = readOptionalString(input.resource.resourceType);
+  if (resourceType === "Binary") {
+    return parseBinaryImport(input);
+  }
+  if (resourceType === "DocumentReference") {
+    return parseDocumentReferenceImport(input);
+  }
+
+  throw new PersonalDoctorDomainError(
+    "fhir_import_resource_unsupported",
+    400,
+    "FHIR import only supports Binary and DocumentReference resources in this slice.",
+  );
 }
 
 function buildPacketFingerprint(record: PersonalDoctorCase, packet: PhysicianPacket): string {
@@ -347,6 +583,42 @@ export function ingestDocument(
       normalizedCharacterCount: normalized.length,
       excerptCharacterCount: excerpt.excerpt.length,
       truncated: excerpt.truncated,
+    },
+  };
+}
+
+export function ingestFhirResource(
+  record: PersonalDoctorCase,
+  input: FhirImportInput,
+  now = new Date(),
+): {
+  nextCase: PersonalDoctorCase;
+  artifact: SourceArtifact;
+  ingestion: DocumentIngestionResult;
+  fhirImport: FhirImportResult;
+} {
+  const parsed = parseFhirImport(input);
+  const result = ingestDocument(
+    record,
+    {
+      artifactType: parsed.artifactType,
+      title: parsed.title,
+      contentType: parsed.sourceContentType,
+      content: parsed.textContent,
+      sourceDate: parsed.sourceDate,
+      provenance: parsed.provenance,
+    },
+    now,
+  );
+
+  return {
+    ...result,
+    fhirImport: {
+      resourceType: parsed.resourceType,
+      transportContentType: "application/fhir+json",
+      sourceContentType: parsed.sourceContentType,
+      title: parsed.title,
+      sourceDate: parsed.sourceDate,
     },
   };
 }
