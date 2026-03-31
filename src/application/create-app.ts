@@ -14,9 +14,26 @@ import {
   createCase,
   draftPhysicianPacket,
   finalizePhysicianPacket,
+  ingestDocument,
   removeArtifact,
   submitReview,
 } from "../domain/personal-doctor";
+
+const sourceDateSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine(
+    (value) => {
+      const date = new Date(`${value}T00:00:00Z`);
+      return !Number.isNaN(date.getTime()) && date.toISOString().startsWith(value);
+    },
+    { message: "sourceDate must be a valid calendar date in YYYY-MM-DD format" },
+  )
+  .refine(
+    (value) => new Date(`${value}T00:00:00Z`) <= new Date(),
+    { message: "sourceDate must not be in the future" },
+  );
 
 const createCaseSchema = z.strictObject({
   patientLabel: z.string().trim().min(1).max(120).optional(),
@@ -32,22 +49,17 @@ const addArtifactSchema = z.strictObject({
   artifactType: z.enum(["note", "lab", "summary", "report", "imaging-summary"]),
   title: z.string().trim().min(1).max(200),
   summary: z.string().trim().min(1).max(4000),
-  sourceDate: z
-    .string()
-    .trim()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .refine(
-      (value) => {
-        const date = new Date(`${value}T00:00:00Z`);
-        return !Number.isNaN(date.getTime()) && date.toISOString().startsWith(value);
-      },
-      { message: "sourceDate must be a valid calendar date in YYYY-MM-DD format" },
-    )
-    .refine(
-      (value) => new Date(`${value}T00:00:00Z`) <= new Date(),
-      { message: "sourceDate must not be in the future" },
-    )
-    .optional(),
+  sourceDate: sourceDateSchema.optional(),
+  provenance: z.string().trim().min(1).max(300).optional(),
+});
+
+const documentIngestionSchema = z.strictObject({
+  artifactType: z.enum(["note", "lab", "summary", "report", "imaging-summary"]),
+  title: z.string().trim().min(1).max(200),
+  contentType: z.enum(["text/plain", "text/markdown"]),
+  content: z.string().min(1).max(12000),
+  filename: z.string().trim().min(1).max(160).optional(),
+  sourceDate: sourceDateSchema.optional(),
   provenance: z.string().trim().min(1).max(300).optional(),
 });
 
@@ -237,6 +249,41 @@ export function createApp({ store, auditStore, isShuttingDown, authMiddleware, r
       }),
     );
     response.status(201).json({ case: nextCase });
+  });
+
+  app.post("/api/cases/:caseId/document-ingestions", parseJson, async (request, response) => {
+    const record = await store.getCase(readRouteParam(request.params.caseId));
+    if (!record) {
+      response.status(404).json({
+        code: "case_not_found",
+        message: "Case not found.",
+      });
+      return;
+    }
+
+    const input = documentIngestionSchema.parse(request.body ?? {});
+    const result = ingestDocument(record, input);
+    await store.saveCase(result.nextCase);
+    await auditStore.append(
+      createAuditEvent({
+        caseId: result.nextCase.caseId,
+        eventType: "document.ingested",
+        action: "ingest_document",
+        occurredAt: result.artifact.createdAt,
+        details: {
+          artifactType: input.artifactType,
+          contentType: result.ingestion.contentType,
+          hasFilename: Boolean(result.ingestion.filename),
+          truncated: result.ingestion.truncated,
+          normalizedCharacters: result.ingestion.normalizedCharacterCount,
+        },
+      }),
+    );
+    response.status(201).json({
+      case: result.nextCase,
+      artifact: result.artifact,
+      ingestion: result.ingestion,
+    });
   });
 
   app.post("/api/cases/:caseId/physician-packets", parseJson, async (request, response) => {

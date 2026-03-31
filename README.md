@@ -21,6 +21,7 @@ It implements a narrow workflow baseline that helps a user organize case intake,
 
 - structured case intake;
 - source artifact registration (with future-date rejection);
+- bounded text document ingestion (`text/plain`, `text/markdown`) into source artifacts;
 - artifact and case deletion;
 - physician packet draft generation;
 - explicit clinician review ledger (approved / changes_requested / rejected);
@@ -71,6 +72,7 @@ Default runtime port: `4020`
 - `GET /api/cases`
 - `GET /api/cases/:caseId`
 - `POST /api/cases/:caseId/artifacts`
+- `POST /api/cases/:caseId/document-ingestions`
 - `DELETE /api/cases/:caseId/artifacts/:artifactId`
 - `POST /api/cases/:caseId/physician-packets`
 - `GET /api/cases/:caseId/physician-packets`
@@ -158,4 +160,5 @@ The server applies the following hardening defaults:
 ## Known Limitations
 
 - **No PII encryption at transit.** HTTPS must be enforced at the reverse-proxy layer for any deployment beyond localhost.
-- **No bounded document-ingestion seam.** Source artifacts are still manually entered summaries rather than parsed uploads or OCR-derived records.
+- **No multipart upload or OCR pipeline.** The document-ingestion seam is intentionally bounded to JSON requests that normalize `text/plain` and `text/markdown` content into source artifacts.
+- **No FHIR-compatible import seam.** `application/fhir+json` resources are not parsed or imported yet.

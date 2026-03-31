@@ -1,7 +1,7 @@
 ---
 title: "Personal Doctor Status Model"
 status: active
-version: "0.7.0"
+version: "0.8.0"
 last_updated: "2026-03-31"
 tags: [personal-doctor, healthcare, status-model, reference]
 ---
@@ -29,8 +29,10 @@ tags: [personal-doctor, healthcare, status-model, reference]
 ## Case Transitions
 
 - Adding the first artifact: `INTAKING` → `READY_FOR_PACKET`.
+- Ingesting the first bounded document follows the same transition as adding the first artifact: `INTAKING` → `READY_FOR_PACKET`.
 - Removing the last artifact: `READY_FOR_PACKET` → `INTAKING`.
 - Adding or removing artifacts marks existing physician packets as stale.
+- Ingesting a bounded document after packet draft also marks existing physician packets as stale because it creates a new source artifact.
 - Drafting a physician packet: `READY_FOR_PACKET` → `REVIEW_REQUIRED`.
 - Reviewing or finalizing a physician packet updates packet state only; the case remains `REVIEW_REQUIRED`.
 - Removing all artifacts after packet history exists leaves the case in `REVIEW_REQUIRED` and marks existing packets stale.

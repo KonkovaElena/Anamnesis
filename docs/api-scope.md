@@ -1,7 +1,7 @@
 ---
 title: "Personal Doctor API Scope"
 status: active
-version: "0.7.0"
+version: "0.8.0"
 last_updated: "2026-03-31"
 tags: [personal-doctor, healthcare, api-scope, reference]
 ---
@@ -14,6 +14,7 @@ tags: [personal-doctor, healthcare, api-scope, reference]
 - `GET /api/cases`
 - `GET /api/cases/:caseId`
 - `POST /api/cases/:caseId/artifacts`
+- `POST /api/cases/:caseId/document-ingestions`
 - `DELETE /api/cases/:caseId/artifacts/:artifactId`
 - `POST /api/cases/:caseId/physician-packets`
 - `GET /api/cases/:caseId/physician-packets`
@@ -38,3 +39,12 @@ When `RATE_LIMIT_RPM` is set to a positive integer, per-IP sliding-window rate l
 ## Boundary Rule
 
 The API is a workflow and packeting surface. It is not a diagnostic API.
+
+## Document Ingestion Boundary
+
+`POST /api/cases/:caseId/document-ingestions` is intentionally bounded.
+
+- accepted content types: `text/plain`, `text/markdown`;
+- request body stays JSON-based;
+- normalized text is converted into a bounded source-artifact summary;
+- multipart uploads, OCR, and full FHIR resource parsing are out of scope.

@@ -1,7 +1,7 @@
 ---
 title: "Personal Doctor Claim Boundary"
 status: active
-version: "0.7.0"
+version: "0.8.0"
 last_updated: "2026-03-31"
 tags: [personal-doctor, healthcare, claim-boundary, reference]
 ---
@@ -12,6 +12,7 @@ tags: [personal-doctor, healthcare, claim-boundary, reference]
 
 - the repository stores cases in SQLite with AES-256-GCM encryption at rest (or in memory when no store path is configured);
 - it registers source artifacts (with future-date rejection);
+- it ingests bounded `text/plain` and `text/markdown` documents into source artifacts;
 - it supports artifact and case deletion;
 - it drafts physician packets from currently stored case data;
 - it records explicit clinician reviews on physician packets;
@@ -29,6 +30,8 @@ tags: [personal-doctor, healthcare, claim-boundary, reference]
 - triage verdict generation;
 - treatment planning;
 - prescription logic;
+- multipart upload or OCR document ingestion;
+- FHIR resource import;
 - medical sign-off or legal attestation.
 
 ## Required Language

@@ -2,12 +2,14 @@ import { createHash, randomUUID } from "node:crypto";
 
 export type CaseStatus = "INTAKING" | "READY_FOR_PACKET" | "REVIEW_REQUIRED";
 export type ArtifactType = "note" | "lab" | "summary" | "report" | "imaging-summary";
+export type DocumentContentType = "text/plain" | "text/markdown";
 export type PhysicianPacketStatus = "DRAFT_REVIEW_REQUIRED" | "CLINICIAN_APPROVED" | "CHANGES_REQUESTED" | "REJECTED" | "FINALIZED";
 export type ReviewAction = "approved" | "changes_requested" | "rejected";
 export type AuditEventType =
   | "case.created"
   | "artifact.added"
   | "artifact.removed"
+  | "document.ingested"
   | "packet.drafted"
   | "review.submitted"
   | "packet.finalized"
@@ -42,6 +44,24 @@ export interface AddArtifactInput {
   summary: string;
   sourceDate?: string;
   provenance?: string;
+}
+
+export interface IngestDocumentInput {
+  artifactType: ArtifactType;
+  title: string;
+  contentType: DocumentContentType;
+  content: string;
+  filename?: string;
+  sourceDate?: string;
+  provenance?: string;
+}
+
+export interface DocumentIngestionResult {
+  contentType: DocumentContentType;
+  filename?: string;
+  normalizedCharacterCount: number;
+  excerptCharacterCount: number;
+  truncated: boolean;
 }
 
 export interface PhysicianPacketSection {
@@ -153,9 +173,53 @@ export class PersonalDoctorDomainError extends Error {
 
 const PACKET_DISCLAIMER =
   "This physician packet is a draft organizational summary for clinician review. It is not a diagnosis, treatment recommendation, or prescription.";
+const DOCUMENT_EXCERPT_LIMIT = 4000;
 
 function toIso(now: Date): string {
   return now.toISOString();
+}
+
+function normalizeDocumentText(content: string): string {
+  return content
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.trim().replace(/\s+/g, " "))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function buildDocumentExcerpt(content: string): { excerpt: string; truncated: boolean } {
+  if (content.length <= DOCUMENT_EXCERPT_LIMIT) {
+    return {
+      excerpt: content,
+      truncated: false,
+    };
+  }
+
+  const maxWithoutEllipsis = DOCUMENT_EXCERPT_LIMIT - 1;
+  const candidate = content.slice(0, maxWithoutEllipsis).trimEnd();
+  const lastBoundary = Math.max(candidate.lastIndexOf("\n"), candidate.lastIndexOf(" "));
+  const bounded = lastBoundary > Math.floor(candidate.length * 0.6)
+    ? candidate.slice(0, lastBoundary).trimEnd()
+    : candidate;
+
+  return {
+    excerpt: `${bounded}…`,
+    truncated: true,
+  };
+}
+
+function buildDocumentProvenance(input: IngestDocumentInput): string {
+  const parts: string[] = [];
+  if (input.provenance) {
+    parts.push(input.provenance);
+  }
+  parts.push(`document-ingestion:${input.contentType}`);
+  if (input.filename) {
+    parts.push(`filename:${input.filename}`);
+  }
+  return parts.join("; ").slice(0, 300);
 }
 
 function buildPacketFingerprint(record: PersonalDoctorCase, packet: PhysicianPacket): string {
@@ -235,6 +299,55 @@ export function addArtifact(
     updatedAt,
     artifacts: [...record.artifacts, artifact],
     physicianPackets,
+  };
+}
+
+export function ingestDocument(
+  record: PersonalDoctorCase,
+  input: IngestDocumentInput,
+  now = new Date(),
+): { nextCase: PersonalDoctorCase; artifact: SourceArtifact; ingestion: DocumentIngestionResult } {
+  const normalized = normalizeDocumentText(input.content);
+  if (normalized.length === 0) {
+    throw new PersonalDoctorDomainError(
+      "document_content_empty",
+      400,
+      "Document content must contain at least one non-whitespace character.",
+    );
+  }
+
+  const excerpt = buildDocumentExcerpt(normalized);
+  const nextCase = addArtifact(
+    record,
+    {
+      artifactType: input.artifactType,
+      title: input.title,
+      summary: excerpt.excerpt,
+      sourceDate: input.sourceDate,
+      provenance: buildDocumentProvenance(input),
+    },
+    now,
+  );
+
+  const artifact = nextCase.artifacts.at(-1);
+  if (!artifact) {
+    throw new PersonalDoctorDomainError(
+      "artifact_creation_failed",
+      500,
+      "Document ingestion did not create a source artifact.",
+    );
+  }
+
+  return {
+    nextCase,
+    artifact,
+    ingestion: {
+      contentType: input.contentType,
+      filename: input.filename,
+      normalizedCharacterCount: normalized.length,
+      excerptCharacterCount: excerpt.excerpt.length,
+      truncated: excerpt.truncated,
+    },
   };
 }
 

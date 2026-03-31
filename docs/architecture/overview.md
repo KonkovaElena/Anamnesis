@@ -1,7 +1,7 @@
 ---
 title: "Personal Doctor Architecture Overview"
 status: active
-version: "0.7.0"
+version: "0.8.0"
 last_updated: "2026-03-31"
 tags: [personal-doctor, healthcare, architecture, reference]
 ---
@@ -29,12 +29,14 @@ The current standalone uses a reduced runtime chain:
 
 | Layer | Responsibility in this slice |
 | --- | --- |
-| Domain | case workflow state, artifact model, physician packet draft/review/finalization model, audit event model |
-| Application | HTTP routes, request validation, response contracts, error mapping, auth middleware, rate limiting, metrics |
+| Domain | case workflow state, artifact model, bounded text-document normalization, physician packet draft/review/finalization model, audit event model |
+| Application | HTTP routes, request validation, response contracts, error mapping, auth middleware, rate limiting, metrics, JSON-only ingestion boundary |
 | Infrastructure | durable SQLite persistence with AES-256-GCM encryption at rest, append-only audit persistence, in-memory fallbacks |
 
 ## Deliberately Missing
-- document parsing pipeline;
+- multipart upload pipeline;
+- OCR or binary document parsing;
+- FHIR resource parsing or import transactions;
 - external audit export or tamper-evident signatures;
 - event publishing;
 - async workers;

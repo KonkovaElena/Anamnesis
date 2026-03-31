@@ -1,7 +1,7 @@
 ---
 title: "Personal Doctor Scope Lock"
 status: active
-version: "0.7.0"
+version: "0.8.0"
 last_updated: "2026-03-31"
 tags: [personal-doctor, healthcare, scope-lock, reference]
 ---
@@ -12,6 +12,7 @@ tags: [personal-doctor, healthcare, scope-lock, reference]
 
 - structured intake capture;
 - source artifact registration (with future-date rejection);
+- bounded text document ingestion (`text/plain`, `text/markdown`) into source artifacts;
 - artifact and case deletion;
 - physician packet draft generation;
 - explicit clinician review ledger;
@@ -30,6 +31,8 @@ tags: [personal-doctor, healthcare, scope-lock, reference]
 - autonomous diagnosis;
 - treatment or prescription guidance;
 - imaging interpretation;
+- multipart uploads, OCR, or binary document parsing;
+- FHIR-compatible import seams;
 - genomics or wearable processing;
 - regulatory or clinical validation claims.
 

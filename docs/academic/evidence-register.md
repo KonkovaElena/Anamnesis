@@ -1,7 +1,7 @@
 ---
 title: "Personal Doctor Evidence Register"
 status: active
-version: "0.7.0"
+version: "0.8.0"
 last_updated: "2026-03-31"
 tags: [personal-doctor, healthcare, evidence, academic]
 ---
@@ -45,6 +45,7 @@ Research-to-phase decisions for this standalone live in `docs/roadmap-and-valida
 ### Security Best Practices
 
 - **Express.js Security Best Practices** (expressjs.com) — recommends Helmet for HTTP security headers, TLS termination, rate limiting, dependency auditing, and safe regex.
+- **body-parser official docs** — current parser stack does not handle multipart bodies, and route-specific parsers are the recommended usage pattern. This bounds the standalone ingestion seam to JSON requests carrying text content instead of file uploads.
 
 ### Competitor Landscape (March 2026)
 

@@ -1,7 +1,7 @@
 ---
 title: "Personal Doctor Roadmap And Validation"
 status: active
-version: "0.7.0"
+version: "0.8.0"
 last_updated: "2026-03-31"
 tags: [personal-doctor, healthcare, roadmap, validation]
 ---
@@ -25,7 +25,14 @@ Then verify:
 
 ## Next Logical Expansions
 
-1. bounded document-ingestion seam.
+1. FHIR-compatible import seam.
+
+## Completed In v0.8.0
+
+- bounded document-ingestion seam for `text/plain` and `text/markdown` request bodies;
+- deterministic whitespace normalization and bounded excerpting into source artifacts;
+- dedicated `document.ingested` audit event;
+- document-ingestion API coverage for route validation, audit trail, and operations summary.
 
 ## Completed In v0.7.0
 
