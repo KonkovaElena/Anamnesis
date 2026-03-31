@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import express, { type NextFunction, type Request, type Response } from "express";
+import helmet from "helmet";
 import { ZodError, z } from "zod";
 import {
   PersonalDoctorDomainError,
@@ -9,11 +10,12 @@ import {
   buildOperationsSummary,
   createCase,
   draftPhysicianPacket,
+  removeArtifact,
 } from "../domain/personal-doctor";
 
-const createCaseSchema = z.object({
+const createCaseSchema = z.strictObject({
   patientLabel: z.string().trim().min(1).max(120).optional(),
-  intake: z.object({
+  intake: z.strictObject({
     chiefConcern: z.string().trim().min(1).max(200),
     symptomSummary: z.string().trim().min(1).max(4000),
     historySummary: z.string().trim().min(1).max(4000),
@@ -21,7 +23,7 @@ const createCaseSchema = z.object({
   }),
 });
 
-const addArtifactSchema = z.object({
+const addArtifactSchema = z.strictObject({
   artifactType: z.enum(["note", "lab", "summary", "report", "imaging-summary"]),
   title: z.string().trim().min(1).max(200),
   summary: z.string().trim().min(1).max(4000),
@@ -36,21 +38,39 @@ const addArtifactSchema = z.object({
       },
       { message: "sourceDate must be a valid calendar date in YYYY-MM-DD format" },
     )
+    .refine(
+      (value) => new Date(`${value}T00:00:00Z`) <= new Date(),
+      { message: "sourceDate must not be in the future" },
+    )
     .optional(),
   provenance: z.string().trim().min(1).max(300).optional(),
 });
 
-const createPacketSchema = z.object({
+const createPacketSchema = z.strictObject({
   requestedBy: z.string().trim().min(1).max(120).optional(),
   focus: z.string().trim().min(1).max(300).optional(),
 });
 
 interface CreateAppDependencies {
   store: PersonalDoctorStore;
+  isShuttingDown?: () => boolean;
+  authMiddleware?: (request: Request, response: Response, next: NextFunction) => void;
+  rateLimitRpm?: number;
 }
 
 function readRouteParam(value: string | string[] | undefined): string {
   return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
+}
+
+function isMalformedJsonError(
+  error: unknown,
+): error is SyntaxError & { status: 400; type: "entity.parse.failed" } {
+  if (!(error instanceof SyntaxError)) {
+    return false;
+  }
+
+  const candidate = error as SyntaxError & Partial<{ status: number; type: string }>;
+  return candidate.status === 400 && candidate.type === "entity.parse.failed";
 }
 
 function renderMetrics(cases: PersonalDoctorCase[]): string {
@@ -76,9 +96,9 @@ function renderMetrics(cases: PersonalDoctorCase[]): string {
   return `${lines.join("\n")}\n`;
 }
 
-export function createApp({ store }: CreateAppDependencies) {
+export function createApp({ store, isShuttingDown, authMiddleware, rateLimitRpm }: CreateAppDependencies) {
   const app = express();
-  app.use(express.json({ limit: "256kb" }));
+  const parseJson = express.json({ limit: "256kb" });
 
   app.use((request, response, next) => {
     const requestId = (request.headers["x-request-id"] as string) || randomUUID();
@@ -86,7 +106,36 @@ export function createApp({ store }: CreateAppDependencies) {
     next();
   });
 
-  app.post("/api/cases", async (request, response) => {
+  app.use(helmet());
+  app.use((_request, response, next) => {
+    response.setHeader("Cache-Control", "no-store");
+    next();
+  });
+
+  app.use((request, response, next) => {
+    const start = performance.now();
+    response.on("finish", () => {
+      const durationMs = (performance.now() - start).toFixed(1);
+      process.stdout.write(`${request.method} ${request.path} ${response.statusCode} ${durationMs}ms\n`);
+    });
+    next();
+  });
+
+  if (authMiddleware) {
+    app.use(authMiddleware);
+  }
+
+  if (rateLimitRpm && rateLimitRpm > 0) {
+    const { createRateLimiter } = require("./rate-limiter") as typeof import("./rate-limiter");
+    app.use(
+      createRateLimiter({
+        windowMs: 60_000,
+        maxRequests: rateLimitRpm,
+        skipPaths: new Set(["/healthz", "/readyz"]),
+      }),
+    );
+  }
+  app.post("/api/cases", parseJson, async (request, response) => {
     const input = createCaseSchema.parse(request.body ?? {});
     const record = createCase(input);
     await store.saveCase(record);
@@ -116,7 +165,7 @@ export function createApp({ store }: CreateAppDependencies) {
     response.json({ case: record });
   });
 
-  app.post("/api/cases/:caseId/artifacts", async (request, response) => {
+  app.post("/api/cases/:caseId/artifacts", parseJson, async (request, response) => {
     const record = await store.getCase(readRouteParam(request.params.caseId));
     if (!record) {
       response.status(404).json({
@@ -132,7 +181,7 @@ export function createApp({ store }: CreateAppDependencies) {
     response.status(201).json({ case: nextCase });
   });
 
-  app.post("/api/cases/:caseId/physician-packets", async (request, response) => {
+  app.post("/api/cases/:caseId/physician-packets", parseJson, async (request, response) => {
     const record = await store.getCase(readRouteParam(request.params.caseId));
     if (!record) {
       response.status(404).json({
@@ -181,7 +230,39 @@ export function createApp({ store }: CreateAppDependencies) {
   });
 
   app.get("/readyz", (_request, response) => {
+    if (isShuttingDown?.()) {
+      response.status(503).json({ status: "shutting_down" });
+      return;
+    }
     response.json({ status: "ready" });
+  });
+
+  app.delete("/api/cases/:caseId/artifacts/:artifactId", async (request, response) => {
+    const record = await store.getCase(readRouteParam(request.params.caseId));
+    if (!record) {
+      response.status(404).json({
+        code: "case_not_found",
+        message: "Case not found.",
+      });
+      return;
+    }
+
+    const nextCase = removeArtifact(record, readRouteParam(request.params.artifactId));
+    await store.saveCase(nextCase);
+    response.json({ case: nextCase });
+  });
+
+  app.delete("/api/cases/:caseId", async (request, response) => {
+    const deleted = await store.deleteCase(readRouteParam(request.params.caseId));
+    if (!deleted) {
+      response.status(404).json({
+        code: "case_not_found",
+        message: "Case not found.",
+      });
+      return;
+    }
+
+    response.status(204).end();
   });
 
   app.get("/metrics", async (_request, response) => {
@@ -197,6 +278,14 @@ export function createApp({ store }: CreateAppDependencies) {
   });
 
   app.use((error: unknown, _request: Request, response: Response, _next: NextFunction) => {
+    if (isMalformedJsonError(error)) {
+      response.status(400).json({
+        code: "invalid_json",
+        message: "Request body contains malformed JSON.",
+      });
+      return;
+    }
+
     if (error instanceof ZodError) {
       response.status(400).json({
         code: "invalid_input",

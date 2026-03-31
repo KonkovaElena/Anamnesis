@@ -1,8 +1,8 @@
 ---
 title: "Personal Doctor Scope Lock"
 status: active
-version: "0.2.0"
-last_updated: "2026-03-30"
+version: "0.4.0"
+last_updated: "2026-03-31"
 tags: [personal-doctor, healthcare, scope-lock, reference]
 ---
 
@@ -11,10 +11,15 @@ tags: [personal-doctor, healthcare, scope-lock, reference]
 ## Included Now
 
 - structured intake capture;
-- source artifact registration;
+- source artifact registration (with future-date rejection);
+- artifact and case deletion;
 - physician packet draft generation;
 - operations summary;
-- health, readiness, and metrics surfaces.
+- health, readiness, and metrics surfaces;
+- Bearer-token authentication;
+- per-IP sliding-window rate limiting;
+- security headers via Helmet (CSP, HSTS, COOP, CORP, etc.);
+- graceful HTTP shutdown with connection draining.
 
 ## Excluded Now
 

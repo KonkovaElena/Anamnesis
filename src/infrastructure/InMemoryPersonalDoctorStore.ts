@@ -17,4 +17,8 @@ export class InMemoryPersonalDoctorStore implements PersonalDoctorStore {
   async saveCase(nextCase: PersonalDoctorCase): Promise<void> {
     this.records.set(nextCase.caseId, structuredClone(nextCase));
   }
+
+  async deleteCase(caseId: string): Promise<boolean> {
+    return this.records.delete(caseId);
+  }
 }

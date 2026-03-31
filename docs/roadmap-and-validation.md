@@ -1,8 +1,8 @@
 ---
 title: "Personal Doctor Roadmap And Validation"
 status: active
-version: "0.3.0"
-last_updated: "2026-03-30"
+version: "0.4.0"
+last_updated: "2026-03-31"
 tags: [personal-doctor, healthcare, roadmap, validation]
 ---
 
@@ -25,10 +25,18 @@ Then verify:
 
 ## Next Logical Expansions
 
-1. durable persistence;
+1. durable persistence with encryption at rest;
 2. explicit clinician review ledger;
 3. packet finalization and audit trail;
 4. bounded document-ingestion seam.
+
+## Completed In v0.4.0
+
+- Bearer-token authentication (`API_KEY`);
+- per-IP sliding-window rate limiting (`RATE_LIMIT_RPM`);
+- security headers via Helmet (CSP, HSTS, COOP, CORP, Referrer-Policy, etc.);
+- sourceDate future-date rejection;
+- Node.js engine bump to >=24 (Active LTS).
 
 ## Future-Phase Evidence Gates
 

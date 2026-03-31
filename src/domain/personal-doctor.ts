@@ -42,7 +42,9 @@ export interface PhysicianPacketSection {
 export interface PhysicianPacket {
   packetId: string;
   status: PhysicianPacketStatus;
+  isStale: boolean;
   createdAt: string;
+  staleAt?: string;
   requestedBy?: string;
   focus?: string;
   disclaimer: string;
@@ -79,6 +81,7 @@ export interface PersonalDoctorStore {
   listCases(): Promise<PersonalDoctorCase[]>;
   getCase(caseId: string): Promise<PersonalDoctorCase | undefined>;
   saveCase(nextCase: PersonalDoctorCase): Promise<void>;
+  deleteCase(caseId: string): Promise<boolean>;
 }
 
 export class PersonalDoctorDomainError extends Error {
@@ -123,6 +126,7 @@ export function addArtifact(
   input: AddArtifactInput,
   now = new Date(),
 ): PersonalDoctorCase {
+  const updatedAt = toIso(now);
   const artifact: SourceArtifact = {
     artifactId: randomUUID(),
     artifactType: input.artifactType,
@@ -130,14 +134,25 @@ export function addArtifact(
     summary: input.summary,
     sourceDate: input.sourceDate,
     provenance: input.provenance,
-    createdAt: toIso(now),
+    createdAt: updatedAt,
   };
+
+  const physicianPackets = record.physicianPackets.map((packet) =>
+    packet.isStale
+      ? packet
+      : {
+          ...packet,
+          isStale: true,
+          staleAt: updatedAt,
+        },
+  );
 
   return {
     ...record,
     status: record.status === "REVIEW_REQUIRED" ? record.status : "READY_FOR_PACKET",
-    updatedAt: toIso(now),
+    updatedAt,
     artifacts: [...record.artifacts, artifact],
+    physicianPackets,
   };
 }
 
@@ -202,6 +217,7 @@ export function draftPhysicianPacket(
   const packet: PhysicianPacket = {
     packetId: randomUUID(),
     status: "DRAFT_REVIEW_REQUIRED",
+    isStale: false,
     createdAt: toIso(now),
     requestedBy: input.requestedBy,
     focus: input.focus,
@@ -219,6 +235,47 @@ export function draftPhysicianPacket(
       updatedAt: toIso(now),
       physicianPackets: [...record.physicianPackets, packet],
     },
+  };
+}
+
+export function removeArtifact(
+  record: PersonalDoctorCase,
+  artifactId: string,
+  now = new Date(),
+): PersonalDoctorCase {
+  const index = record.artifacts.findIndex((a) => a.artifactId === artifactId);
+  if (index === -1) {
+    throw new PersonalDoctorDomainError(
+      "artifact_not_found",
+      404,
+      "Artifact not found.",
+    );
+  }
+
+  const updatedAt = toIso(now);
+  const artifacts = record.artifacts.filter((_, i) => i !== index);
+
+  const physicianPackets = record.physicianPackets.map((packet) =>
+    packet.isStale
+      ? packet
+      : {
+          ...packet,
+          isStale: true,
+          staleAt: updatedAt,
+        },
+  );
+
+  let status: CaseStatus = record.status;
+  if (artifacts.length === 0 && status !== "REVIEW_REQUIRED") {
+    status = "INTAKING";
+  }
+
+  return {
+    ...record,
+    status,
+    updatedAt,
+    artifacts,
+    physicianPackets,
   };
 }
 

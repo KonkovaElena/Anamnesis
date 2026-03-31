@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import { once } from "node:events";
 import { bootstrap } from "./bootstrap";
+import { createGracefulShutdownHandler } from "./graceful-shutdown";
 
 function resolvePort(): number {
   const rawValue = process.env.PORT ?? "4020";
@@ -14,7 +15,20 @@ function resolvePort(): number {
 }
 
 async function main() {
-  const { app } = bootstrap();
+  let shuttingDown = false;
+
+  const apiKey = process.env.API_KEY?.trim() || undefined;
+  const rateLimitRpm = Number(process.env.RATE_LIMIT_RPM ?? "0") || undefined;
+
+  if (!apiKey) {
+    process.stdout.write("[WARN] API_KEY is not set — all endpoints are unauthenticated. Set API_KEY in production.\n");
+  }
+
+  const { app } = bootstrap({
+    isShuttingDown: () => shuttingDown,
+    apiKey,
+    rateLimitRpm,
+  });
   const port = resolvePort();
 
   const server = createServer(app);
@@ -28,19 +42,19 @@ async function main() {
     process.exitCode = 1;
   });
 
-  let shutdownStarted = false;
+  const gracefulShutdown = createGracefulShutdownHandler(server, {
+    forceCloseTimeoutMs: 10_000,
+    writeStdout: (message) => {
+      process.stdout.write(message);
+    },
+    writeStderr: (message) => {
+      process.exitCode = 1;
+      process.stderr.write(message);
+    },
+  });
 
-  function gracefulShutdown(signal: string) {
-    if (shutdownStarted) return;
-    shutdownStarted = true;
-    process.stdout.write(`\n${signal} received — closing server\n`);
-    server.close(() => {
-      process.stdout.write("server closed\n");
-    });
-  }
-
-  process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
-  process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+  process.on("SIGTERM", () => { shuttingDown = true; gracefulShutdown("SIGTERM"); });
+  process.on("SIGINT", () => { shuttingDown = true; gracefulShutdown("SIGINT"); });
 
   server.listen(port);
   await once(server, "listening");

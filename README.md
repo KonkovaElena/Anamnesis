@@ -10,7 +10,7 @@ It implements a narrow workflow baseline that helps a user organize case intake,
 
 | Technology | Version | Role |
 |---|---|---|
-| Node.js | >=22 LTS | Runtime |
+| Node.js | >=24 LTS | Runtime |
 | TypeScript | 6.0 | Type system & compiler |
 | Express | 5.2 | HTTP framework |
 | Zod | 4.3 | Runtime input validation |
@@ -19,9 +19,14 @@ It implements a narrow workflow baseline that helps a user organize case intake,
 ## Current Scope
 
 - structured case intake;
-- source artifact registration;
+- source artifact registration (with future-date rejection);
+- artifact and case deletion;
 - physician packet draft generation;
 - operations summary;
+- Bearer-token authentication (`API_KEY`);
+- per-IP sliding-window rate limiting (`RATE_LIMIT_RPM`);
+- security headers via Helmet (CSP, HSTS, COOP, CORP, Referrer-Policy, etc.);
+- graceful HTTP shutdown with connection draining;
 - `GET /healthz`, `GET /readyz`, and `GET /metrics`.
 
 ## Non-Goals In This Slice
@@ -45,14 +50,24 @@ npm run dev
 
 Default runtime port: `4020`
 
+## Environment Variables
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `PORT` | No | `4020` | HTTP listen port |
+| `API_KEY` | No | — | Bearer token for API authentication. When unset, all endpoints are unauthenticated (dev mode). |
+| `RATE_LIMIT_RPM` | No | `0` (disabled) | Maximum requests per minute per IP. Health and readiness probes are exempt. |
+
 ## API Surface
 
 - `POST /api/cases`
 - `GET /api/cases`
 - `GET /api/cases/:caseId`
 - `POST /api/cases/:caseId/artifacts`
+- `DELETE /api/cases/:caseId/artifacts/:artifactId`
 - `POST /api/cases/:caseId/physician-packets`
 - `GET /api/cases/:caseId/physician-packets`
+- `DELETE /api/cases/:caseId`
 - `GET /api/operations/summary`
 - `GET /healthz`
 - `GET /readyz`
@@ -87,9 +102,23 @@ The current documentation set is a normalized March 30, 2026 snapshot prepared s
 
 This repository is not a medical decision engine. The generated physician packet is a draft summary for clinician review. No route returns a diagnosis or treatment recommendation.
 
-## Runtime Note
+## March 2026 Migration Notes
 
-The current package uses an in-memory store by default. That is intentional for the first standalone slice. Durable persistence, consent storage, review ledgers, and external document ingestion remain future hardening steps.
+### Express 5.2
+
+Express 5 catches rejected promises in async route handlers automatically. The `asyncHandler` wrapper used with Express 4 has been removed. Error middleware still uses the 4-parameter `(err, req, res, next)` signature per Express 5 spec.
+
+### Helmet 8
+
+Replaces manual `X-Content-Type-Options` / `X-Frame-Options` / `Cache-Control` headers with the full Helmet suite (11 headers). `Cache-Control: no-store` is retained as a separate middleware because Helmet does not set it for non-static routes.
+
+### Node.js 24
+
+Node.js 22 "Jod" entered Maintenance LTS (EOL March 2026). The engine requirement has been bumped to `>=24` (Active LTS "Krypton", v24.14.1).
+
+### TypeScript 6.0
+
+`module` set to `"node20"` and `target` set to `"es2022"` (the former `"Node"` module resolution value is deprecated in TS 6). `strict: true` is now the compiler default.
 
 ## Security Posture
 
@@ -97,23 +126,16 @@ The current package uses an in-memory store by default. That is intentional for 
 
 The server applies the following hardening defaults:
 
+- Security headers via [Helmet](https://helmetjs.github.io/) (Content-Security-Policy, Strict-Transport-Security, Cross-Origin-Opener-Policy, Cross-Origin-Resource-Policy, Referrer-Policy, X-Content-Type-Options, X-Frame-Options, etc.)
+- `Cache-Control: no-store` to prevent caching of health-related data
 - `requestTimeout`: 30 s
 - `headersTimeout`: 40 s
 - Generic 500 error responses (raw messages are logged server-side, not returned to clients)
 - `x-request-id` propagation for correlation tracking
+- Request logging (`method path status duration`) on stdout
 
-## Environment
+## Known Limitations
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `PORT` | `4020` | HTTP listener port |
-
-## March 2026 Migration Notes
-
-### Express 5.2
-
-Express 5 catches rejected promises in async route handlers automatically. The `asyncHandler` wrapper used with Express 4 has been removed. Error middleware still uses the 4-parameter `(err, req, res, next)` signature per Express 5 spec.
-
-### TypeScript 6.0
-
-`moduleResolution` set to `"bundler"` (the former `"Node"` value is deprecated in TS 6). Target upgraded to `"es2025"`. `strict: true` is now the compiler default.
+- **No PII encryption at rest.** Case data including patient labels, symptoms, and clinical history is stored in plain memory. Durable persistence phases must address encryption at rest and explicit consent records before handling real patient data.
+- **No audit trail.** Write operations are not yet logged as an auditable event stream. The roadmap includes a clinician review ledger in Phase 3.
+- **In-memory store only.** All data is lost on process restart. Durable persistence is a future hardening step.

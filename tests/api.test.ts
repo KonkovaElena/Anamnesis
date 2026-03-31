@@ -3,7 +3,9 @@ import { once } from "node:events";
 import { createServer } from "node:http";
 import { type AddressInfo } from "node:net";
 import test from "node:test";
+import { createApp } from "../src/application/create-app";
 import { bootstrap } from "../src/bootstrap";
+import { InMemoryPersonalDoctorStore } from "../src/infrastructure/InMemoryPersonalDoctorStore";
 
 async function withServer(run: (baseUrl: string) => Promise<void>) {
   const { app } = bootstrap();
@@ -43,6 +45,120 @@ async function jsonRequest<T>(
     body: (await response.json()) as T,
   };
 }
+
+test("request validation rejects unrecognized fields instead of silently stripping them", async () => {
+  await withServer(async (baseUrl) => {
+    const response = await jsonRequest<{
+      code: string;
+      details: Array<{ code: string; keys?: string[] }>;
+    }>(baseUrl, "/api/cases", {
+      method: "POST",
+      body: {
+        patientLabel: "case-extra-fields",
+        unexpectedTopLevel: true,
+        intake: {
+          chiefConcern: "Persistent cough",
+          symptomSummary: "Cough has continued for eleven days.",
+          historySummary: "No diagnosis has been captured yet.",
+          questionsForClinician: [],
+          unexpectedNested: "should be rejected",
+        },
+      },
+    });
+
+    assert.equal(response.status, 400);
+    assert.equal(response.body.code, "invalid_input");
+    assert.equal(
+      response.body.details.some(
+        (issue) => issue.code === "unrecognized_keys" && issue.keys?.includes("unexpectedTopLevel"),
+      ),
+      true,
+    );
+    assert.equal(
+      response.body.details.some(
+        (issue) => issue.code === "unrecognized_keys" && issue.keys?.includes("unexpectedNested"),
+      ),
+      true,
+    );
+  });
+});
+
+test("malformed JSON bodies return a 400 validation response", async () => {
+  await withServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/cases`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: '{"intake":',
+    });
+
+    const body = (await response.json()) as { code: string; message: string };
+
+    assert.equal(response.status, 400);
+    assert.equal(body.code, "invalid_json");
+  });
+});
+
+test("adding a new artifact marks existing physician packets as stale", async () => {
+  await withServer(async (baseUrl) => {
+    const createResponse = await jsonRequest<{ case: { caseId: string } }>(baseUrl, "/api/cases", {
+      method: "POST",
+      body: {
+        patientLabel: "case-stale-packet",
+        intake: {
+          chiefConcern: "Recurring dizziness",
+          symptomSummary: "Episodes have increased over the last week.",
+          historySummary: "Prior urgent-care summary is available.",
+          questionsForClinician: ["Should follow-up labs be prioritized?"],
+        },
+      },
+    });
+    const caseId = createResponse.body.case.caseId;
+
+    await jsonRequest(baseUrl, `/api/cases/${caseId}/artifacts`, {
+      method: "POST",
+      body: {
+        artifactType: "summary",
+        title: "Urgent care summary",
+        summary: "Initial clinician note documented dizziness without diagnosis.",
+        sourceDate: "2026-03-28",
+      },
+    });
+
+    const packetResponse = await jsonRequest<{
+      packet: { packetId: string; isStale: boolean; staleAt?: string };
+    }>(baseUrl, `/api/cases/${caseId}/physician-packets`, {
+      method: "POST",
+      body: {
+        requestedBy: "user@example.test",
+      },
+    });
+
+    assert.equal(packetResponse.status, 201);
+    assert.equal(packetResponse.body.packet.isStale, false);
+
+    await jsonRequest(baseUrl, `/api/cases/${caseId}/artifacts`, {
+      method: "POST",
+      body: {
+        artifactType: "lab",
+        title: "Follow-up lab panel",
+        summary: "Additional evidence was registered after the packet draft.",
+        sourceDate: "2026-03-29",
+      },
+    });
+
+    const listPacketsResponse = await jsonRequest<{
+      physicianPackets: Array<{ packetId: string; isStale: boolean; staleAt?: string }>;
+    }>(baseUrl, `/api/cases/${caseId}/physician-packets`);
+
+    assert.equal(listPacketsResponse.status, 200);
+    assert.equal(listPacketsResponse.body.physicianPackets.length, 1);
+    assert.equal(listPacketsResponse.body.physicianPackets[0]?.packetId, packetResponse.body.packet.packetId);
+    assert.equal(listPacketsResponse.body.physicianPackets[0]?.isStale, true);
+    assert.match(listPacketsResponse.body.physicianPackets[0]?.staleAt ?? "", /^\d{4}-\d{2}-\d{2}T/);
+  });
+});
 
 test("case creation, listing, and detail retrieval work end-to-end", async () => {
   await withServer(async (baseUrl) => {
@@ -227,5 +343,350 @@ test("operations summary and metrics reflect the live in-memory state", async ()
     assert.match(metricsText, /personal_doctor_cases_total 2/);
     assert.match(metricsText, /personal_doctor_artifacts_total 1/);
     assert.match(metricsText, /personal_doctor_cases_by_status\{status="READY_FOR_PACKET"\} 1/);
+  });
+});
+
+test("responses include security headers", async () => {
+  await withServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/healthz`);
+    assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+    assert.equal(response.headers.get("x-frame-options"), "SAMEORIGIN");
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    assert.ok(
+      response.headers.has("content-security-policy"),
+      "Helmet must set Content-Security-Policy",
+    );
+  });
+});
+
+test("validation rejects empty required strings", async () => {
+  await withServer(async (baseUrl) => {
+    const response = await jsonRequest<{ code: string }>(baseUrl, "/api/cases", {
+      method: "POST",
+      body: {
+        intake: {
+          chiefConcern: "",
+          symptomSummary: "Some symptoms present.",
+          historySummary: "No prior diagnosis.",
+        },
+      },
+    });
+    assert.equal(response.status, 400);
+    assert.equal(response.body.code, "invalid_input");
+  });
+});
+
+test("validation rejects strings exceeding maximum length", async () => {
+  await withServer(async (baseUrl) => {
+    const response = await jsonRequest<{ code: string }>(baseUrl, "/api/cases", {
+      method: "POST",
+      body: {
+        intake: {
+          chiefConcern: "x".repeat(201),
+          symptomSummary: "Some symptoms present.",
+          historySummary: "No prior diagnosis.",
+        },
+      },
+    });
+    assert.equal(response.status, 400);
+    assert.equal(response.body.code, "invalid_input");
+  });
+});
+
+test("validation rejects invalid artifact type enum values", async () => {
+  await withServer(async (baseUrl) => {
+    const createResult = await jsonRequest<{ case: { caseId: string } }>(baseUrl, "/api/cases", {
+      method: "POST",
+      body: {
+        intake: {
+          chiefConcern: "Test concern",
+          symptomSummary: "Test symptoms documented.",
+          historySummary: "No prior diagnosis available.",
+        },
+      },
+    });
+    const response = await jsonRequest<{ code: string }>(
+      baseUrl,
+      `/api/cases/${createResult.body.case.caseId}/artifacts`,
+      {
+        method: "POST",
+        body: {
+          artifactType: "x-ray",
+          title: "Some imaging result",
+          summary: "Summary of the imaging result.",
+        },
+      },
+    );
+    assert.equal(response.status, 400);
+    assert.equal(response.body.code, "invalid_input");
+  });
+});
+
+test("validation rejects impossible calendar dates in sourceDate", async () => {
+  await withServer(async (baseUrl) => {
+    const createResult = await jsonRequest<{ case: { caseId: string } }>(baseUrl, "/api/cases", {
+      method: "POST",
+      body: {
+        intake: {
+          chiefConcern: "Test concern",
+          symptomSummary: "Test symptoms documented.",
+          historySummary: "No prior diagnosis available.",
+        },
+      },
+    });
+    const response = await jsonRequest<{ code: string }>(
+      baseUrl,
+      `/api/cases/${createResult.body.case.caseId}/artifacts`,
+      {
+        method: "POST",
+        body: {
+          artifactType: "lab",
+          title: "Lab panel",
+          summary: "Lab results from an impossible date.",
+          sourceDate: "2026-02-30",
+        },
+      },
+    );
+    assert.equal(response.status, 400);
+    assert.equal(response.body.code, "invalid_input");
+  });
+});
+
+test("DELETE /api/cases/:caseId/artifacts/:artifactId removes artifact and marks packets stale", async () => {
+  await withServer(async (baseUrl) => {
+    const createResult = await jsonRequest<{ case: { caseId: string } }>(baseUrl, "/api/cases", {
+      method: "POST",
+      body: {
+        intake: {
+          chiefConcern: "Knee pain after running",
+          symptomSummary: "Sharp pain in left knee during and after running.",
+          historySummary: "No prior injury. Active runner for three years.",
+        },
+      },
+    });
+    const caseId = createResult.body.case.caseId;
+
+    await jsonRequest(baseUrl, `/api/cases/${caseId}/artifacts`, {
+      method: "POST",
+      body: {
+        artifactType: "summary",
+        title: "Initial assessment notes",
+        summary: "Runner with acute left knee pain, no swelling.",
+      },
+    });
+
+    const addSecond = await jsonRequest<{ case: { artifacts: Array<{ artifactId: string }> } }>(
+      baseUrl,
+      `/api/cases/${caseId}/artifacts`,
+      {
+        method: "POST",
+        body: {
+          artifactType: "lab",
+          title: "Blood panel",
+          summary: "Standard panel results within normal limits.",
+        },
+      },
+    );
+
+    await jsonRequest(baseUrl, `/api/cases/${caseId}/physician-packets`, {
+      method: "POST",
+      body: { requestedBy: "test@example.test" },
+    });
+
+    const artifactId = addSecond.body.case.artifacts[1]?.artifactId;
+    const deleteResult = await jsonRequest<{
+      case: { artifacts: Array<{ artifactId: string }>; physicianPackets: Array<{ isStale: boolean }> };
+    }>(baseUrl, `/api/cases/${caseId}/artifacts/${artifactId}`, {
+      method: "DELETE",
+    });
+
+    assert.equal(deleteResult.status, 200);
+    assert.equal(deleteResult.body.case.artifacts.length, 1);
+    assert.equal(deleteResult.body.case.physicianPackets[0]?.isStale, true);
+  });
+});
+
+test("DELETE artifact on a missing case returns 404", async () => {
+  await withServer(async (baseUrl) => {
+    const response = await jsonRequest<{ code: string }>(
+      baseUrl,
+      "/api/cases/nonexistent-case-id/artifacts/nonexistent-artifact",
+      { method: "DELETE" },
+    );
+    assert.equal(response.status, 404);
+    assert.equal(response.body.code, "case_not_found");
+  });
+});
+
+test("DELETE artifact with a wrong artifactId returns 404", async () => {
+  await withServer(async (baseUrl) => {
+    const createResult = await jsonRequest<{ case: { caseId: string } }>(baseUrl, "/api/cases", {
+      method: "POST",
+      body: {
+        intake: {
+          chiefConcern: "Fatigue",
+          symptomSummary: "Chronic fatigue lasting two months.",
+          historySummary: "No relevant prior diagnosis.",
+        },
+      },
+    });
+    const caseId = createResult.body.case.caseId;
+
+    await jsonRequest(baseUrl, `/api/cases/${caseId}/artifacts`, {
+      method: "POST",
+      body: {
+        artifactType: "note",
+        title: "Clinician note",
+        summary: "Patient reports fatigue but no other symptoms.",
+      },
+    });
+
+    const response = await jsonRequest<{ code: string }>(
+      baseUrl,
+      `/api/cases/${caseId}/artifacts/wrong-artifact-id`,
+      { method: "DELETE" },
+    );
+    assert.equal(response.status, 404);
+    assert.equal(response.body.code, "artifact_not_found");
+  });
+});
+
+test("DELETE last artifact reverts case status to INTAKING", async () => {
+  await withServer(async (baseUrl) => {
+    const createResult = await jsonRequest<{ case: { caseId: string } }>(baseUrl, "/api/cases", {
+      method: "POST",
+      body: {
+        intake: {
+          chiefConcern: "Lower back pain",
+          symptomSummary: "Persistent lower back pain for one week.",
+          historySummary: "No prior injury or imaging performed.",
+        },
+      },
+    });
+    const caseId = createResult.body.case.caseId;
+
+    const addResult = await jsonRequest<{
+      case: { status: string; artifacts: Array<{ artifactId: string }> };
+    }>(baseUrl, `/api/cases/${caseId}/artifacts`, {
+      method: "POST",
+      body: {
+        artifactType: "lab",
+        title: "CBC panel",
+        summary: "Results within normal ranges.",
+      },
+    });
+
+    assert.equal(addResult.body.case.status, "READY_FOR_PACKET");
+    const artifactId = addResult.body.case.artifacts[0]?.artifactId;
+
+    const deleteResult = await jsonRequest<{ case: { status: string; artifacts: Array<unknown> } }>(
+      baseUrl,
+      `/api/cases/${caseId}/artifacts/${artifactId}`,
+      { method: "DELETE" },
+    );
+
+    assert.equal(deleteResult.status, 200);
+    assert.equal(deleteResult.body.case.status, "INTAKING");
+    assert.equal(deleteResult.body.case.artifacts.length, 0);
+  });
+});
+
+test("DELETE /api/cases/:caseId removes case and returns 204", async () => {
+  await withServer(async (baseUrl) => {
+    const createResult = await jsonRequest<{ case: { caseId: string } }>(baseUrl, "/api/cases", {
+      method: "POST",
+      body: {
+        intake: {
+          chiefConcern: "Seasonal allergy symptoms",
+          symptomSummary: "Sneezing and congestion for two weeks.",
+          historySummary: "Known allergy history managed with OTC medications.",
+        },
+      },
+    });
+    const caseId = createResult.body.case.caseId;
+
+    const deleteResponse = await fetch(`${baseUrl}/api/cases/${caseId}`, { method: "DELETE" });
+    assert.equal(deleteResponse.status, 204);
+
+    const detailResponse = await jsonRequest<{ code: string }>(baseUrl, `/api/cases/${caseId}`);
+    assert.equal(detailResponse.status, 404);
+    assert.equal(detailResponse.body.code, "case_not_found");
+  });
+});
+
+test("DELETE /api/cases/:caseId returns 404 for missing case", async () => {
+  await withServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/cases/nonexistent-case-id`, { method: "DELETE" });
+    assert.equal(response.status, 404);
+    const body = (await response.json()) as { code: string };
+    assert.equal(body.code, "case_not_found");
+  });
+});
+
+test("/readyz returns 503 when the server is shutting down", async () => {
+  let shuttingDown = false;
+  const store = new InMemoryPersonalDoctorStore();
+  const app = createApp({ store, isShuttingDown: () => shuttingDown });
+
+  const server = createServer(app);
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const address = server.address() as AddressInfo;
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+
+  try {
+    const readyResponse = await fetch(`${baseUrl}/readyz`);
+    const readyBody = (await readyResponse.json()) as { status: string };
+    assert.equal(readyResponse.status, 200);
+    assert.equal(readyBody.status, "ready");
+
+    shuttingDown = true;
+
+    const drainingResponse = await fetch(`${baseUrl}/readyz`);
+    const drainingBody = (await drainingResponse.json()) as { status: string };
+    assert.equal(drainingResponse.status, 503);
+    assert.equal(drainingBody.status, "shutting_down");
+  } finally {
+    server.close();
+    await once(server, "close");
+  }
+});
+
+test("sourceDate in the future is rejected with 400", async () => {
+  await withServer(async (baseUrl) => {
+    const createResponse = await jsonRequest<{ case: { caseId: string } }>(baseUrl, "/api/cases", {
+      method: "POST",
+      body: {
+        patientLabel: "case-future-date",
+        intake: {
+          chiefConcern: "Headache",
+          symptomSummary: "Intermittent headache for two days.",
+          historySummary: "No prior diagnosis.",
+          questionsForClinician: [],
+        },
+      },
+    });
+    const caseId = createResponse.body.case.caseId;
+
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const futureDate = tomorrow.toISOString().slice(0, 10);
+
+    const artifactResponse = await jsonRequest<{ code: string }>(
+      baseUrl,
+      `/api/cases/${caseId}/artifacts`,
+      {
+        method: "POST",
+        body: {
+          artifactType: "summary",
+          title: "Future-dated note",
+          summary: "This should be rejected.",
+          sourceDate: futureDate,
+        },
+      },
+    );
+
+    assert.equal(artifactResponse.status, 400);
+    assert.equal(artifactResponse.body.code, "invalid_input");
   });
 });

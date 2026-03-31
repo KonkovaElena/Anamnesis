@@ -1,12 +1,12 @@
 {
   "name": "personal-doctor-control-plane",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "private": true,
   "description": "Clinician-in-the-loop personal health control plane bootstrap",
   "license": "MIT",
   "type": "commonjs",
   "engines": {
-    "node": ">=22"
+    "node": ">=24"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -23,6 +23,7 @@
   ],
   "dependencies": {
     "express": "^5.2.1",
+    "helmet": "^8.1.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {

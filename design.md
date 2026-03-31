@@ -1,8 +1,8 @@
 ---
 title: "Personal Doctor Standalone Design"
 status: active
-version: "0.2.0"
-last_updated: "2026-03-30"
+version: "0.4.0"
+last_updated: "2026-03-31"
 tags: [personal-doctor, healthcare, standalone, explanation]
 ---
 
@@ -57,10 +57,11 @@ That means terms such as multi-agent orchestration, evidence engine, FHIR-compat
 
 | Dependency | Version | Notes |
 |---|---|---|
-| TypeScript | 6.0 | `moduleResolution: "bundler"`, `target: "es2025"` |
+| TypeScript | 6.0 | `module: "node20"`, `target: "es2022"` |
 | Express | 5.2 | Native async handler support, no wrapper needed |
 | Zod | 4.3 | Runtime schema validation |
-| Node.js | >=22 | LTS runtime |
+| Helmet | 8.x | Security headers middleware |
+| Node.js | >=24 | Active LTS runtime |
 | node:test | built-in | No external test framework |
 
 ## Claim Classes

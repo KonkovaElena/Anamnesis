@@ -1,8 +1,8 @@
 ---
 title: "Personal Doctor Evidence Register"
 status: active
-version: "0.3.0"
-last_updated: "2026-03-30"
+version: "0.4.0"
+last_updated: "2026-03-31"
 tags: [personal-doctor, healthcare, evidence, academic]
 ---
 
@@ -28,6 +28,33 @@ This repository intentionally internalizes its March 30, 2026 evidence and roadm
 The local authority for standalone claims is the local authority set above.
 
 Research-to-phase decisions for this standalone live in `docs/roadmap-and-validation.md`.
+
+## External References (March 2026 Audit)
+
+### Standards
+
+- **HL7 FHIR R5** (v5.0.0, September 2024) — current interoperability standard for health data exchange. Roadmap Phase 2 references FHIR-compatible import seams.
+- **WHO SMART Guidelines** — digital adaptation of clinical guidelines using FHIR + ICD-11 + CQL. Relevant for future clinical decision support phases.
+- **ICD-11** — WHO International Classification of Diseases, current revision. Standard coding system for health conditions.
+
+### Regulatory Landscape
+
+- **FDA AI-Enabled Medical Device List** (current as of 03/04/2026, 29 pages) — catalogs AI/ML-enabled devices with marketing authorization. Project's clinician-in-the-loop positioning aligns with FDA human-oversight requirements.
+- **EU MDR 2017/745** — classifies clinical decision support software. Project explicitly disclaims clinical decision support output.
+
+### Security Best Practices
+
+- **Express.js Security Best Practices** (expressjs.com) — recommends Helmet for HTTP security headers, TLS termination, rate limiting, dependency auditing, and safe regex.
+
+### Competitor Landscape (March 2026)
+
+| Repository | Language | Architecture | Status |
+|---|---|---|---|
+| `kononyukii/structured-intake-assistant` | TypeScript/Next.js | Client-side, local-first | Closest feature overlap |
+| `NickLeko/TriageAI` | Python/Streamlit | LLM-based triage MVP | Demo only |
+| `leenathomas/the-consult-model` | — | Architectural thought experiment | No implementation |
+
+The competitive landscape for structured clinician-in-the-loop intake systems is sparse as of March 2026. This project offers stronger architectural rigor (typed domain model, explicit claim boundaries, layered architecture) than all identified analogs.
 
 The broader v6-style subsystem concepts such as multi-agent orchestration, evidence engine design, FHIR-compatible data seams, governance and safety layers, and agent-native patient-graph candidates remain roadmap material until this standalone ships them.
 
