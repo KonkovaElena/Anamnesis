@@ -8,9 +8,11 @@ Repository name: `Anamnesis`
 
 Recommended default branch on GitHub: `main`
 
-## 2. Push The Repository
+## 2. Confirm Or Set The Git Remote
 
-Example sequence after creating the GitHub repository:
+If `origin` already points to `https://github.com/KonkovaElena/Anamnesis.git`, confirm it with `git remote -v` and skip the reconfiguration.
+
+If the standalone export remote is still the default remote, use the following sequence:
 
 ```bash
 git branch -M main
@@ -32,26 +34,42 @@ npm pkg set bugs.url=https://github.com/KonkovaElena/Anamnesis/issues
 npm pkg set homepage=https://github.com/KonkovaElena/Anamnesis#readme
 ```
 
-## 4. Replace Pre-Launch Placeholders
+## 4. Turn On Citation And Archival Metadata
+
+This repository now ships with `CITATION.cff` so GitHub can render a `Cite this repository` prompt from the default branch.
+
+After the first public tagged release:
+
+1. Connect the GitHub repository to Zenodo or another archival DOI provider.
+2. Mint a version-specific DOI from the tagged release.
+3. Backfill that DOI into `CITATION.cff`.
+4. Verify that GitHub still renders the citation prompt correctly.
+
+## 5. Replace Pre-Launch Placeholders
 
 - Verify that GitHub private vulnerability reporting is enabled for the repository.
 - Verify that the repository owner's preferred private contact path on GitHub is still accurate.
+- If author ORCID or institutional affiliation becomes public, backfill it into `CITATION.cff`.
 
-## 5. Enable GitHub Repository Settings
+## 6. Enable GitHub Repository Settings
 
 Recommended settings before public announcement:
 
-- enable branch protection for the default branch;
+- create a ruleset or branch protection for `main`;
+- require pull requests before merge;
+- require the `CI / Verify (ubuntu-latest)` and `CI / Verify (windows-latest)` checks;
+- require code owner review when collaborators are added;
 - enable Dependency graph;
 - enable Dependabot alerts and security updates;
+- verify that the committed `CodeQL` workflow is enabled and that the first code-scanning run completes successfully after push;
 - enable private vulnerability reporting;
 - enable secret scanning for the public repository if available on your plan;
 - add repository description, website URL, and topics;
 - review whether Discussions should be enabled for community support.
 
-## 6. Validate Community Profile
+## 7. Validate Repository Surfaces
 
-After push, check the GitHub community profile and confirm these files are recognized:
+After push, confirm the public repository surfaces resolve correctly:
 
 - `README.md`
 - `LICENSE`
@@ -60,8 +78,12 @@ After push, check the GitHub community profile and confirm these files are recog
 - `SECURITY.md`
 - `.github/ISSUE_TEMPLATE/*`
 - `.github/pull_request_template.md`
+- `CITATION.cff` renders through `Cite this repository`
+- `.github/CODEOWNERS` resolves owners on the default branch
+- `.github/dependabot.yml` is accepted without schema errors
+- `.github/workflows/codeql.yml` produces code-scanning alerts after the first run
 
-## 7. Release Hygiene
+## 8. Release Hygiene
 
 Before the first public release:
 
@@ -69,3 +91,4 @@ Before the first public release:
 2. Confirm `npm run build` passes.
 3. Update `CHANGELOG.md`.
 4. Verify docs and README still match runtime behavior and scope boundaries.
+5. Verify `git status` is clean and `.env`, `data/`, `node_modules/`, `dist/`, and `coverage/` remain untracked aside from intentional templates.

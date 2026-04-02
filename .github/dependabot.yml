@@ -5,33 +5,34 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-      time: "05:00"
+      time: "06:00"
       timezone: "UTC"
     open-pull-requests-limit: 5
     versioning-strategy: "increase-if-necessary"
     commit-message:
-      prefix: "chore"
+      prefix: "deps"
       include: "scope"
     groups:
-      production-dependencies:
+      npm-production:
         dependency-type: "production"
-        update-types:
-          - "minor"
-          - "patch"
-      development-dependencies:
+        patterns:
+          - "*"
+      npm-development:
         dependency-type: "development"
-        update-types:
-          - "minor"
-          - "patch"
+        patterns:
+          - "*"
+    cooldown:
+      semver-major-days: 7
+      semver-minor-days: 3
+      semver-patch-days: 1
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
       day: "monday"
-      time: "05:30"
+      time: "06:30"
       timezone: "UTC"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 2
     commit-message:
-      prefix: "chore"
-      include: "scope"
+      prefix: "ci"

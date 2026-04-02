@@ -1,0 +1,6 @@
+# Default owner for repository content.
+* @KonkovaElena
+
+# Protect governance and automation surfaces explicitly when code owner review is enabled.
+/.github/ @KonkovaElena
+/.github/CODEOWNERS @KonkovaElena

@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use Anamnesis in research, evaluation, or clinician-workflow studies, please cite the software artifact below."
+type: software
+title: "Anamnesis"
+version: "1.0.0"
+date-released: 2026-04-01
+license: "MIT"
+authors:
+  - family-names: "Konkova"
+    given-names: "Elena"
+repository-code: "https://github.com/KonkovaElena/Anamnesis"
+url: "https://github.com/KonkovaElena/Anamnesis"
+abstract: "Clinician-in-the-loop personal health control plane bootstrap for structured case intake, supporting artifacts, and physician-facing packet drafts without diagnosis or treatment claims."
+keywords:
+  - "anamnesis"
+  - "clinician-in-the-loop"
+  - "health workflow"
+  - "typescript"
+  - "express"

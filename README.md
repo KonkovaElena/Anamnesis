@@ -64,10 +64,19 @@ Default runtime port: `4020`
 - Contribution guidelines: [CONTRIBUTING.md](CONTRIBUTING.md)
 - Code of conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
 - Security reporting: [SECURITY.md](SECURITY.md)
+- Citation metadata: [CITATION.cff](CITATION.cff)
 - Release history: [CHANGELOG.md](CHANGELOG.md)
 - GitHub publication checklist: [PUBLISHING.md](PUBLISHING.md)
 
 For bug reports, feature requests, and usage questions, use the repository issue forms after the project is published to GitHub.
+
+## Citation
+
+This repository ships with `CITATION.cff` so GitHub can render machine-readable software citation metadata.
+
+If you use Anamnesis in research, evaluation, or clinician-workflow studies, cite the versioned software artifact rather than mentioning the repository only in prose.
+
+For long-lived scholarly citation, archive a tagged release through Zenodo or another DOI-minting archive and then backfill the DOI into `CITATION.cff`.
 
 ## Environment Variables
 

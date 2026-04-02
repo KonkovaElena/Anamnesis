@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - anamnesis-standalone
   pull_request:
   workflow_dispatch:
 
