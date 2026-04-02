@@ -1,12 +1,33 @@
 {
-  "name": "personal-doctor-control-plane",
-  "version": "0.9.0",
+  "name": "anamnesis-control-plane",
+  "version": "1.0.0",
   "private": true,
+  "author": "Anamnesis contributors",
   "description": "Clinician-in-the-loop personal health control plane bootstrap",
+  "homepage": "https://github.com/KonkovaElena/Anamnesis#readme",
+  "bugs": {
+    "url": "https://github.com/KonkovaElena/Anamnesis/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KonkovaElena/Anamnesis.git"
+  },
   "license": "MIT",
   "type": "commonjs",
   "engines": {
     "node": ">=24"
+  },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": ">=24",
+      "onFail": "error"
+    },
+    "packageManager": {
+      "name": "npm",
+      "version": ">=11",
+      "onFail": "warn"
+    }
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -17,7 +38,7 @@
   "keywords": [
     "healthcare",
     "clinician-in-the-loop",
-    "personal-doctor",
+    "anamnesis",
     "typescript",
     "express"
   ],

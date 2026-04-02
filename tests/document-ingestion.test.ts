@@ -4,8 +4,8 @@ import {
   addArtifact,
   createCase,
   draftPhysicianPacket,
-  type PersonalDoctorCase,
-} from "../src/domain/personal-doctor";
+  type AnamnesisCase,
+} from "../src/domain/anamnesis";
 
 interface IngestDocumentInputView {
   artifactType: "note" | "lab" | "summary" | "report" | "imaging-summary";
@@ -26,25 +26,25 @@ interface IngestionView {
 }
 
 type IngestResultView = {
-  nextCase: PersonalDoctorCase;
+  nextCase: AnamnesisCase;
   artifact: { summary: string; provenance?: string };
   ingestion: IngestionView;
 };
 
 type IngestDocumentFn = (
-  record: PersonalDoctorCase,
+  record: AnamnesisCase,
   input: IngestDocumentInputView,
   now?: Date,
 ) => IngestResultView;
 
 async function loadIngestDocument(): Promise<IngestDocumentFn> {
-  const moduleNamespace = (await import("../src/domain/personal-doctor")) as Record<string, unknown>;
+  const moduleNamespace = (await import("../src/domain/anamnesis")) as Record<string, unknown>;
   const ingestDocument = moduleNamespace.ingestDocument;
   assert.equal(typeof ingestDocument, "function", "ingestDocument export missing");
   return ingestDocument as IngestDocumentFn;
 }
 
-function seedPacketCase(): PersonalDoctorCase {
+function seedPacketCase(): AnamnesisCase {
   let record = createCase({
     patientLabel: "document-ingestion-case",
     intake: {

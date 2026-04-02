@@ -5,7 +5,7 @@ import { type AddressInfo } from "node:net";
 import test from "node:test";
 import { createApp } from "../src/application/create-app";
 import { bootstrap } from "../src/bootstrap";
-import { InMemoryPersonalDoctorStore } from "../src/infrastructure/InMemoryPersonalDoctorStore";
+import { InMemoryAnamnesisStore } from "../src/infrastructure/InMemoryAnamnesisStore";
 
 async function withServer(run: (baseUrl: string) => Promise<void>) {
   const { app } = bootstrap();
@@ -340,9 +340,9 @@ test("operations summary and metrics reflect the live in-memory state", async ()
     const metricsText = await metricsResponse.text();
 
     assert.equal(metricsResponse.status, 200);
-    assert.match(metricsText, /personal_doctor_cases_total 2/);
-    assert.match(metricsText, /personal_doctor_artifacts_total 1/);
-    assert.match(metricsText, /personal_doctor_cases_by_status\{status="READY_FOR_PACKET"\} 1/);
+    assert.match(metricsText, /anamnesis_cases_total 2/);
+    assert.match(metricsText, /anamnesis_artifacts_total 1/);
+    assert.match(metricsText, /anamnesis_cases_by_status\{status="READY_FOR_PACKET"\} 1/);
   });
 });
 
@@ -425,9 +425,9 @@ test("operations summary and metrics expose review, finalization, and audit coun
     const metricsText = await metricsResponse.text();
 
     assert.equal(metricsResponse.status, 200);
-    assert.match(metricsText, /personal_doctor_reviews_total 1/);
-    assert.match(metricsText, /personal_doctor_finalized_packets_total 1/);
-    assert.match(metricsText, /personal_doctor_audit_events_total 5/);
+    assert.match(metricsText, /anamnesis_reviews_total 1/);
+    assert.match(metricsText, /anamnesis_finalized_packets_total 1/);
+    assert.match(metricsText, /anamnesis_audit_events_total 5/);
   });
 });
 
@@ -710,7 +710,7 @@ test("DELETE /api/cases/:caseId returns 404 for missing case", async () => {
 
 test("/readyz returns 503 when the server is shutting down", async () => {
   let shuttingDown = false;
-  const store = new InMemoryPersonalDoctorStore();
+  const store = new InMemoryAnamnesisStore();
   const app = createApp({ store, isShuttingDown: () => shuttingDown });
 
   const server = createServer(app);

@@ -1,9 +1,9 @@
 ---
-title: "Personal Doctor Scope Lock"
+title: "Anamnesis Scope Lock"
 status: active
-version: "0.9.0"
-last_updated: "2026-03-31"
-tags: [personal-doctor, healthcare, scope-lock, reference]
+version: "1.0.0"
+last_updated: "2026-04-01"
+tags: [anamnesis, healthcare, scope-lock, reference]
 ---
 
 # Scope Lock
@@ -14,6 +14,8 @@ tags: [personal-doctor, healthcare, scope-lock, reference]
 - source artifact registration (with future-date rejection);
 - bounded text document ingestion (`text/plain`, `text/markdown`) into source artifacts;
 - bounded FHIR-compatible import seam for inline `Binary` and `DocumentReference` resources carrying `text/plain` or `text/markdown` payloads;
+- bounded FHIR Bundle import seam for `document` and `collection` bundles with supported `Binary` or `DocumentReference` entries;
+- explicit, request-gated `https` dereference for `attachment.url` when the fetched payload remains bounded `text/plain` or `text/markdown`;
 - artifact and case deletion;
 - physician packet draft generation;
 - explicit clinician review ledger;
@@ -33,8 +35,8 @@ tags: [personal-doctor, healthcare, scope-lock, reference]
 - treatment or prescription guidance;
 - imaging interpretation;
 - multipart uploads, OCR, or binary document parsing;
-- FHIR REST server behavior, Bundle imports, or transaction handling;
-- external attachment dereference;
+- FHIR REST server behavior or transaction handling;
+- generic or ungated external attachment dereference;
 - genomics or wearable processing;
 - regulatory or clinical validation claims.
 

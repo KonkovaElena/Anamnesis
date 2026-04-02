@@ -1,20 +1,20 @@
-import type { PersonalDoctorCase, PersonalDoctorStore } from "../domain/personal-doctor";
+import type { AnamnesisCase, AnamnesisStore } from "../domain/anamnesis";
 
-export class InMemoryPersonalDoctorStore implements PersonalDoctorStore {
-  private readonly records = new Map<string, PersonalDoctorCase>();
+export class InMemoryAnamnesisStore implements AnamnesisStore {
+  private readonly records = new Map<string, AnamnesisCase>();
 
-  async listCases(): Promise<PersonalDoctorCase[]> {
+  async listCases(): Promise<AnamnesisCase[]> {
     return [...this.records.values()]
       .map((record) => structuredClone(record))
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
   }
 
-  async getCase(caseId: string): Promise<PersonalDoctorCase | undefined> {
+  async getCase(caseId: string): Promise<AnamnesisCase | undefined> {
     const record = this.records.get(caseId);
     return record ? structuredClone(record) : undefined;
   }
 
-  async saveCase(nextCase: PersonalDoctorCase): Promise<void> {
+  async saveCase(nextCase: AnamnesisCase): Promise<void> {
     this.records.set(nextCase.caseId, structuredClone(nextCase));
   }
 

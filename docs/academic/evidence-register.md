@@ -1,9 +1,9 @@
 ---
-title: "Personal Doctor Evidence Register"
+title: "Anamnesis Evidence Register"
 status: active
-version: "0.9.0"
-last_updated: "2026-03-31"
-tags: [personal-doctor, healthcare, evidence, academic]
+version: "1.0.0"
+last_updated: "2026-04-01"
+tags: [anamnesis, healthcare, evidence, academic]
 ---
 
 # Evidence Register
@@ -33,7 +33,7 @@ Research-to-phase decisions for this standalone live in `docs/roadmap-and-valida
 
 ### Standards
 
-- **HL7 FHIR R5** (v5.0.0, September 2024) — current interoperability standard for health data exchange. The standalone now ships a bounded FHIR-compatible import seam while broader FHIR exchange remains roadmap-scoped.
+- **HL7 FHIR R5** (v5.0.0, September 2024) — current interoperability standard for health data exchange. The standalone now ships bounded single-resource and Bundle import seams, including explicit `attachment.url` dereference gates for supported text content, while broader FHIR exchange remains roadmap-scoped.
 - **WHO SMART Guidelines** — digital adaptation of clinical guidelines using FHIR + ICD-11 + CQL. Relevant for future clinical decision support phases.
 - **ICD-11** — WHO International Classification of Diseases, current revision. Standard coding system for health conditions.
 
@@ -57,6 +57,6 @@ Research-to-phase decisions for this standalone live in `docs/roadmap-and-valida
 
 The competitive landscape for structured clinician-in-the-loop intake systems is sparse as of March 2026. This project offers stronger architectural rigor (typed domain model, explicit claim boundaries, layered architecture) than all identified analogs.
 
-The broader v6-style subsystem concepts such as multi-agent orchestration, evidence engine design, FHIR Bundle or transaction exchange, governance and safety layers, and agent-native patient-graph candidates remain roadmap material until this standalone ships them.
+The broader v6-style subsystem concepts such as multi-agent orchestration, evidence engine design, FHIR transaction exchange, governance and safety layers, and agent-native patient-graph candidates remain roadmap material until this standalone ships them.
 
 No standalone runtime claim should be widened from this file alone.

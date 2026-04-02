@@ -5,8 +5,8 @@ import {
   createCase,
   draftPhysicianPacket,
   submitReview,
-  type PersonalDoctorCase,
-} from "../src/domain/personal-doctor";
+  type AnamnesisCase,
+} from "../src/domain/anamnesis";
 
 interface FinalizePacketInputView {
   finalizedBy: string;
@@ -24,25 +24,25 @@ interface FinalizedPacketView {
 }
 
 type FinalizeResultView = {
-  nextCase: PersonalDoctorCase;
+  nextCase: AnamnesisCase;
   packet: FinalizedPacketView;
 };
 
 type FinalizePacketFn = (
-  record: PersonalDoctorCase,
+  record: AnamnesisCase,
   packetId: string,
   input: FinalizePacketInputView,
   now?: Date,
 ) => FinalizeResultView;
 
 async function loadFinalizePacket(): Promise<FinalizePacketFn> {
-  const moduleNamespace = (await import("../src/domain/personal-doctor")) as Record<string, unknown>;
+  const moduleNamespace = (await import("../src/domain/anamnesis")) as Record<string, unknown>;
   const finalizePacket = moduleNamespace.finalizePhysicianPacket;
   assert.equal(typeof finalizePacket, "function", "finalizePhysicianPacket export missing");
   return finalizePacket as FinalizePacketFn;
 }
 
-function seedApprovedPacket(): { record: PersonalDoctorCase; packetId: string } {
+function seedApprovedPacket(): { record: AnamnesisCase; packetId: string } {
   let record = createCase({
     patientLabel: "finalization-case",
     intake: {

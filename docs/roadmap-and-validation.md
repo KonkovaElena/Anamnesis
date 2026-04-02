@@ -1,9 +1,9 @@
 ---
-title: "Personal Doctor Roadmap And Validation"
+title: "Anamnesis Roadmap And Validation"
 status: active
-version: "0.9.0"
-last_updated: "2026-03-31"
-tags: [personal-doctor, healthcare, roadmap, validation]
+version: "1.0.0"
+last_updated: "2026-04-01"
+tags: [anamnesis, healthcare, roadmap, validation]
 ---
 
 # Roadmap And Validation
@@ -25,7 +25,14 @@ Then verify:
 
 ## Next Logical Expansions
 
-1. FHIR document Bundle handling and attachment.url dereference under an explicit interoperability gate.
+1. Composition-aware bundle traversal and richer non-text document handling under an explicit interoperability gate.
+
+## Completed In v1.0.0
+
+- bounded FHIR Bundle import seam at `POST /api/cases/:caseId/fhir-bundle-imports`;
+- support for `document` and `collection` bundles that extract supported `Binary` and `DocumentReference` entries into source artifacts;
+- explicit, request-gated `https` dereference of `DocumentReference.content.attachment.url` for bounded `text/plain` and `text/markdown` payloads;
+- dedicated `fhir.bundle.imported` audit event with route, domain, and adapter coverage.
 
 ## Completed In v0.9.0
 

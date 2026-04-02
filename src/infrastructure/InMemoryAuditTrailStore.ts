@@ -1,4 +1,4 @@
-import type { AuditEventRecord, AuditTrailStore } from "../domain/personal-doctor";
+import type { AuditEventRecord, AuditTrailStore } from "../domain/anamnesis";
 
 export class InMemoryAuditTrailStore implements AuditTrailStore {
   private readonly events: AuditEventRecord[] = [];

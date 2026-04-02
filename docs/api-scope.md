@@ -1,9 +1,9 @@
 ---
-title: "Personal Doctor API Scope"
+title: "Anamnesis API Scope"
 status: active
-version: "0.9.0"
-last_updated: "2026-03-31"
-tags: [personal-doctor, healthcare, api-scope, reference]
+version: "1.0.0"
+last_updated: "2026-04-01"
+tags: [anamnesis, healthcare, api-scope, reference]
 ---
 
 # API Scope
@@ -16,6 +16,7 @@ tags: [personal-doctor, healthcare, api-scope, reference]
 - `POST /api/cases/:caseId/artifacts`
 - `POST /api/cases/:caseId/document-ingestions`
 - `POST /api/cases/:caseId/fhir-imports`
+- `POST /api/cases/:caseId/fhir-bundle-imports`
 - `DELETE /api/cases/:caseId/artifacts/:artifactId`
 - `POST /api/cases/:caseId/physician-packets`
 - `GET /api/cases/:caseId/physician-packets`
@@ -58,4 +59,16 @@ The API is a workflow and packeting surface. It is not a diagnostic API.
 - supported resource types: `Binary`, `DocumentReference`;
 - supported inline document media types: `text/plain`, `text/markdown`;
 - imports reuse the bounded source-artifact summary pipeline and do not create a FHIR repository;
-- Bundle handling, generic FHIR transactions, and external `attachment.url` dereference are out of scope.
+- Bundle handling is delegated to the separate bundle route, and generic FHIR transactions remain out of scope.
+
+## FHIR Bundle Import Boundary
+
+`POST /api/cases/:caseId/fhir-bundle-imports` is intentionally bounded.
+
+- request body stays JSON-based and wraps a FHIR `Bundle` resource object;
+- supported bundle types: `document`, `collection`;
+- supported entry resource types: `Binary`, `DocumentReference`;
+- supported document media types: `text/plain`, `text/markdown`;
+- inline attachment data is preferred; `attachment.url` is only dereferenced when `allowExternalAttachmentFetch` is explicitly `true`;
+- external fetch is bounded to `https`, text responses, timeout enforcement, and byte limits;
+- transaction semantics, history bundles, search bundles, and generic FHIR repository behavior remain out of scope.

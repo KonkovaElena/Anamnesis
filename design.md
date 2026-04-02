@@ -1,12 +1,12 @@
 ---
-title: "Personal Doctor Standalone Design"
+title: "Anamnesis Standalone Design"
 status: active
-version: "0.9.0"
-last_updated: "2026-03-31"
-tags: [personal-doctor, healthcare, standalone, explanation]
+version: "1.0.0"
+last_updated: "2026-04-01"
+tags: [anamnesis, healthcare, standalone, explanation]
 ---
 
-# Design: Personal Doctor Standalone
+# Design: Anamnesis Standalone
 
 ## Goal
 
@@ -36,6 +36,8 @@ The project should earn any future medical positioning through explicit workflow
 - append-only audit trail storage paired with the case store;
 - JSON-only document-ingestion seam for `text/plain` and `text/markdown` content;
 - bounded FHIR-compatible import seam for inline `Binary` and `DocumentReference` resources carrying `text/plain` or `text/markdown` payloads;
+- bounded FHIR Bundle import seam for `document` or `collection` bundles that extract supported `Binary` and `DocumentReference` entries into source artifacts;
+- explicit, request-gated `https` dereference for `attachment.url` when the fetched response remains `text/plain` or `text/markdown` and within byte limits;
 - in-memory fallback when `STORE_PATH` is not configured;
 - explicit bootstrap seam in `src/bootstrap.ts`;
 - reduced Domain -> Application -> Infrastructure split;
@@ -49,9 +51,9 @@ The broader future-phase architecture for this project is normalized into this s
 - local evidence authority: `docs/academic/evidence-register.md`;
 - local future-phase map: `docs/roadmap-and-validation.md`.
 
-These surfaces capture the March 30, 2026 authority snapshot in standalone form so the project can be reviewed, transferred, and evolved without requiring the parent monorepo.
+These surfaces capture the April 1, 2026 authority snapshot in standalone form so the project can be reviewed, transferred, and evolved without requiring the parent monorepo.
 
-That means terms such as multi-agent orchestration, evidence engine, multipart upload handling, OCR, FHIR Bundle import, external attachment dereference, governance layer, or agent-native patient graph remain roadmap concepts until this standalone gains matching code and verification.
+That means terms such as multi-agent orchestration, evidence engine, multipart upload handling, OCR, FHIR transaction semantics, generic external attachment dereference, governance layer, or agent-native patient graph remain roadmap concepts until this standalone gains matching code and verification.
 
 ## Current Safety Posture
 

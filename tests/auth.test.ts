@@ -6,7 +6,7 @@ import test from "node:test";
 import { createApp } from "../src/application/create-app";
 import { createAuthMiddleware } from "../src/application/auth-middleware";
 import { InMemoryAuditTrailStore } from "../src/infrastructure/InMemoryAuditTrailStore";
-import { InMemoryPersonalDoctorStore } from "../src/infrastructure/InMemoryPersonalDoctorStore";
+import { InMemoryAnamnesisStore } from "../src/infrastructure/InMemoryAnamnesisStore";
 
 const TEST_API_KEY = "test-secret-key-for-auth-tests";
 
@@ -14,7 +14,7 @@ async function withAuthServer(
   apiKey: string | undefined,
   run: (baseUrl: string) => Promise<void>,
 ) {
-  const store = new InMemoryPersonalDoctorStore();
+  const store = new InMemoryAnamnesisStore();
   const auditStore = new InMemoryAuditTrailStore();
   const authMiddleware = apiKey
     ? createAuthMiddleware({

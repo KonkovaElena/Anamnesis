@@ -1,5 +1,5 @@
 import Database from "better-sqlite3";
-import type { PersonalDoctorCase, PersonalDoctorStore } from "../domain/personal-doctor";
+import type { AnamnesisCase, AnamnesisStore } from "../domain/anamnesis";
 import { decrypt, encrypt } from "./encryption";
 
 export interface SqliteStoreOptions {
@@ -7,7 +7,7 @@ export interface SqliteStoreOptions {
   encryptionKey: Buffer;
 }
 
-export class SqlitePersonalDoctorStore implements PersonalDoctorStore {
+export class SqliteAnamnesisStore implements AnamnesisStore {
   private readonly db: Database.Database;
   private readonly key: Buffer;
 
@@ -28,7 +28,7 @@ export class SqlitePersonalDoctorStore implements PersonalDoctorStore {
     `);
   }
 
-  async listCases(): Promise<PersonalDoctorCase[]> {
+  async listCases(): Promise<AnamnesisCase[]> {
     const rows = this.db
       .prepare("SELECT encrypted_data FROM cases ORDER BY created_at DESC")
       .all() as Array<{ encrypted_data: string }>;
@@ -36,7 +36,7 @@ export class SqlitePersonalDoctorStore implements PersonalDoctorStore {
     return rows.map((row) => JSON.parse(decrypt(row.encrypted_data, this.key)));
   }
 
-  async getCase(caseId: string): Promise<PersonalDoctorCase | undefined> {
+  async getCase(caseId: string): Promise<AnamnesisCase | undefined> {
     const row = this.db
       .prepare("SELECT encrypted_data FROM cases WHERE case_id = ?")
       .get(caseId) as { encrypted_data: string } | undefined;
@@ -45,7 +45,7 @@ export class SqlitePersonalDoctorStore implements PersonalDoctorStore {
     return JSON.parse(decrypt(row.encrypted_data, this.key));
   }
 
-  async saveCase(nextCase: PersonalDoctorCase): Promise<void> {
+  async saveCase(nextCase: AnamnesisCase): Promise<void> {
     const encrypted = encrypt(JSON.stringify(nextCase), this.key);
 
     this.db

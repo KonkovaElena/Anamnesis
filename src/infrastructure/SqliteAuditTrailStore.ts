@@ -1,5 +1,5 @@
 import Database from "better-sqlite3";
-import type { AuditEventRecord, AuditTrailStore } from "../domain/personal-doctor";
+import type { AuditEventRecord, AuditTrailStore } from "../domain/anamnesis";
 
 export interface SqliteAuditTrailStoreOptions {
   dbPath: string;

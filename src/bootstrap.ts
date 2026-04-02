@@ -1,11 +1,12 @@
 import { type NextFunction, type Request, type Response } from "express";
 import { createApp } from "./application/create-app";
-import type { AuditTrailStore, PersonalDoctorStore } from "./domain/personal-doctor";
-import { InMemoryPersonalDoctorStore } from "./infrastructure/InMemoryPersonalDoctorStore";
+import type { AuditTrailStore, ExternalAttachmentFetcher, AnamnesisStore } from "./domain/anamnesis";
+import { InMemoryAnamnesisStore } from "./infrastructure/InMemoryAnamnesisStore";
 import { InMemoryAuditTrailStore } from "./infrastructure/InMemoryAuditTrailStore";
 import { parseEncryptionKey } from "./infrastructure/encryption";
+import { HttpExternalAttachmentFetcher } from "./infrastructure/HttpExternalAttachmentFetcher";
 import { SqliteAuditTrailStore } from "./infrastructure/SqliteAuditTrailStore";
-import { SqlitePersonalDoctorStore } from "./infrastructure/SqlitePersonalDoctorStore";
+import { SqliteAnamnesisStore } from "./infrastructure/SqliteAnamnesisStore";
 
 export interface BootstrapOptions {
   isShuttingDown?: () => boolean;
@@ -13,19 +14,22 @@ export interface BootstrapOptions {
   rateLimitRpm?: number;
   storePath?: string;
   encryptionKey?: string;
+  externalAttachmentFetcher?: ExternalAttachmentFetcher;
 }
 
 export function bootstrap(options?: BootstrapOptions) {
-  let store: PersonalDoctorStore;
+  let store: AnamnesisStore;
   let auditStore: AuditTrailStore;
   let closeStore: (() => void) | undefined;
+  const externalAttachmentFetcher = options?.externalAttachmentFetcher
+    ?? new HttpExternalAttachmentFetcher().fetchAttachment.bind(new HttpExternalAttachmentFetcher());
 
   if (options?.storePath) {
     if (!options.encryptionKey) {
       throw new Error("ENCRYPTION_KEY is required when STORE_PATH is set");
     }
     const key = parseEncryptionKey(options.encryptionKey);
-    const sqliteStore = new SqlitePersonalDoctorStore({ dbPath: options.storePath, encryptionKey: key });
+    const sqliteStore = new SqliteAnamnesisStore({ dbPath: options.storePath, encryptionKey: key });
     const sqliteAuditStore = new SqliteAuditTrailStore({ dbPath: options.storePath });
     store = sqliteStore;
     auditStore = sqliteAuditStore;
@@ -34,7 +38,7 @@ export function bootstrap(options?: BootstrapOptions) {
       sqliteStore.close();
     };
   } else {
-    store = new InMemoryPersonalDoctorStore();
+    store = new InMemoryAnamnesisStore();
     auditStore = new InMemoryAuditTrailStore();
   }
 
@@ -53,6 +57,7 @@ export function bootstrap(options?: BootstrapOptions) {
     isShuttingDown: options?.isShuttingDown,
     authMiddleware,
     rateLimitRpm: options?.rateLimitRpm,
+    externalAttachmentFetcher,
   });
 
   return {

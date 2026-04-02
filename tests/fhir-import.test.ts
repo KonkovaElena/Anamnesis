@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  PersonalDoctorDomainError,
+  AnamnesisDomainError,
   addArtifact,
   createCase,
   draftPhysicianPacket,
-  type PersonalDoctorCase,
-} from "../src/domain/personal-doctor";
+  type AnamnesisCase,
+} from "../src/domain/anamnesis";
 
 interface FhirImportInputView {
   artifactType?: "note" | "lab" | "summary" | "report" | "imaging-summary";
@@ -33,26 +33,26 @@ interface IngestionView {
 }
 
 type FhirImportResultView = {
-  nextCase: PersonalDoctorCase;
+  nextCase: AnamnesisCase;
   artifact: { title: string; summary: string; provenance?: string; sourceDate?: string };
   ingestion: IngestionView;
   fhirImport: FhirImportView;
 };
 
 type IngestFhirResourceFn = (
-  record: PersonalDoctorCase,
+  record: AnamnesisCase,
   input: FhirImportInputView,
   now?: Date,
 ) => FhirImportResultView;
 
 async function loadIngestFhirResource(): Promise<IngestFhirResourceFn> {
-  const moduleNamespace = (await import("../src/domain/personal-doctor")) as Record<string, unknown>;
+  const moduleNamespace = (await import("../src/domain/anamnesis")) as Record<string, unknown>;
   const ingestFhirResource = moduleNamespace.ingestFhirResource;
   assert.equal(typeof ingestFhirResource, "function", "ingestFhirResource export missing");
   return ingestFhirResource as IngestFhirResourceFn;
 }
 
-function seedPacketCase(): PersonalDoctorCase {
+function seedPacketCase(): AnamnesisCase {
   let record = createCase({
     patientLabel: "fhir-import-case",
     intake: {
@@ -170,7 +170,7 @@ test("ingestFhirResource rejects DocumentReference imports that only expose exte
         },
       }),
     (error: unknown) => {
-      assert.ok(error instanceof PersonalDoctorDomainError);
+      assert.ok(error instanceof AnamnesisDomainError);
       assert.equal(error.code, "fhir_import_requires_inline_data");
       return true;
     },

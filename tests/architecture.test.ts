@@ -14,7 +14,7 @@ async function readAllSources(directory: string): Promise<string> {
 
 test("domain layer stays free of infrastructure imports", async () => {
   const domainSource = await readFile(
-    join(process.cwd(), "src", "domain", "personal-doctor.ts"),
+    join(process.cwd(), "src", "domain", "anamnesis.ts"),
     "utf8",
   );
 

@@ -140,8 +140,8 @@ test("audit trail survives case deletion and metrics expose finalized packet and
 
     const metricsBeforeDelete = await fetch(`${baseUrl}/metrics`);
     const metricsBeforeDeleteText = await metricsBeforeDelete.text();
-    assert.match(metricsBeforeDeleteText, /personal_doctor_audit_events_total 5/);
-    assert.match(metricsBeforeDeleteText, /personal_doctor_finalized_packets_total 1/);
+    assert.match(metricsBeforeDeleteText, /anamnesis_audit_events_total 5/);
+    assert.match(metricsBeforeDeleteText, /anamnesis_finalized_packets_total 1/);
 
     const deleteResponse = await fetch(`${baseUrl}/api/cases/${caseId}`, { method: "DELETE" });
     assert.equal(deleteResponse.status, 204);
@@ -157,7 +157,7 @@ test("audit trail survives case deletion and metrics expose finalized packet and
 
     const metricsResponse = await fetch(`${baseUrl}/metrics`);
     const metricsText = await metricsResponse.text();
-    assert.match(metricsText, /personal_doctor_audit_events_total 6/);
-    assert.match(metricsText, /personal_doctor_finalized_packets_total 0/);
+    assert.match(metricsText, /anamnesis_audit_events_total 6/);
+    assert.match(metricsText, /anamnesis_finalized_packets_total 0/);
   });
 });

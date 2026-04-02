@@ -4,8 +4,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import type { PersonalDoctorCase } from "../src/domain/personal-doctor";
-import { SqlitePersonalDoctorStore } from "../src/infrastructure/SqlitePersonalDoctorStore";
+import type { AnamnesisCase } from "../src/domain/anamnesis";
+import { SqliteAnamnesisStore } from "../src/infrastructure/SqliteAnamnesisStore";
 
 const TEST_KEY = randomBytes(32);
 
@@ -13,7 +13,7 @@ function makeTempDir(): string {
   return mkdtempSync(join(tmpdir(), "pd-test-"));
 }
 
-function makeCase(overrides?: Partial<PersonalDoctorCase>): PersonalDoctorCase {
+function makeCase(overrides?: Partial<AnamnesisCase>): AnamnesisCase {
   const now = new Date().toISOString();
   return {
     caseId: randomUUID(),
@@ -36,7 +36,7 @@ function makeCase(overrides?: Partial<PersonalDoctorCase>): PersonalDoctorCase {
 test("saveCase + getCase roundtrip", async () => {
   const dir = makeTempDir();
   try {
-    const store = new SqlitePersonalDoctorStore({ dbPath: join(dir, "test.db"), encryptionKey: TEST_KEY });
+    const store = new SqliteAnamnesisStore({ dbPath: join(dir, "test.db"), encryptionKey: TEST_KEY });
     const c = makeCase();
     await store.saveCase(c);
 
@@ -51,7 +51,7 @@ test("saveCase + getCase roundtrip", async () => {
 test("getCase returns undefined for missing id", async () => {
   const dir = makeTempDir();
   try {
-    const store = new SqlitePersonalDoctorStore({ dbPath: join(dir, "test.db"), encryptionKey: TEST_KEY });
+    const store = new SqliteAnamnesisStore({ dbPath: join(dir, "test.db"), encryptionKey: TEST_KEY });
     const result = await store.getCase("missing-id");
     assert.equal(result, undefined);
     store.close();
@@ -63,7 +63,7 @@ test("getCase returns undefined for missing id", async () => {
 test("listCases returns cases sorted by createdAt descending", async () => {
   const dir = makeTempDir();
   try {
-    const store = new SqlitePersonalDoctorStore({ dbPath: join(dir, "test.db"), encryptionKey: TEST_KEY });
+    const store = new SqliteAnamnesisStore({ dbPath: join(dir, "test.db"), encryptionKey: TEST_KEY });
 
     const older = makeCase({ createdAt: "2025-01-01T00:00:00.000Z", updatedAt: "2025-01-01T00:00:00.000Z" });
     const newer = makeCase({ createdAt: "2026-03-01T00:00:00.000Z", updatedAt: "2026-03-01T00:00:00.000Z" });
@@ -83,7 +83,7 @@ test("listCases returns cases sorted by createdAt descending", async () => {
 test("saveCase upserts on existing caseId", async () => {
   const dir = makeTempDir();
   try {
-    const store = new SqlitePersonalDoctorStore({ dbPath: join(dir, "test.db"), encryptionKey: TEST_KEY });
+    const store = new SqliteAnamnesisStore({ dbPath: join(dir, "test.db"), encryptionKey: TEST_KEY });
     const c = makeCase();
     await store.saveCase(c);
 
@@ -102,7 +102,7 @@ test("saveCase upserts on existing caseId", async () => {
 test("deleteCase returns true for existing case", async () => {
   const dir = makeTempDir();
   try {
-    const store = new SqlitePersonalDoctorStore({ dbPath: join(dir, "test.db"), encryptionKey: TEST_KEY });
+    const store = new SqliteAnamnesisStore({ dbPath: join(dir, "test.db"), encryptionKey: TEST_KEY });
     const c = makeCase();
     await store.saveCase(c);
 
@@ -120,7 +120,7 @@ test("deleteCase returns true for existing case", async () => {
 test("deleteCase returns false for missing case", async () => {
   const dir = makeTempDir();
   try {
-    const store = new SqlitePersonalDoctorStore({ dbPath: join(dir, "test.db"), encryptionKey: TEST_KEY });
+    const store = new SqliteAnamnesisStore({ dbPath: join(dir, "test.db"), encryptionKey: TEST_KEY });
     const deleted = await store.deleteCase("nonexistent");
     assert.equal(deleted, false);
     store.close();
@@ -135,11 +135,11 @@ test("data persists across store instances", async () => {
     const dbPath = join(dir, "persist.db");
     const c = makeCase();
 
-    const store1 = new SqlitePersonalDoctorStore({ dbPath, encryptionKey: TEST_KEY });
+    const store1 = new SqliteAnamnesisStore({ dbPath, encryptionKey: TEST_KEY });
     await store1.saveCase(c);
     store1.close();
 
-    const store2 = new SqlitePersonalDoctorStore({ dbPath, encryptionKey: TEST_KEY });
+    const store2 = new SqliteAnamnesisStore({ dbPath, encryptionKey: TEST_KEY });
     const retrieved = await store2.getCase(c.caseId);
     assert.deepStrictEqual(retrieved, c);
     store2.close();
@@ -155,7 +155,7 @@ test("data is actually encrypted on disk (not plaintext)", async () => {
     const dbPath = join(dir, "enc.db");
     const c = makeCase({ patientLabel: "UNIQUE_PATIENT_MARKER_12345" });
 
-    const store = new SqlitePersonalDoctorStore({ dbPath, encryptionKey: TEST_KEY });
+    const store = new SqliteAnamnesisStore({ dbPath, encryptionKey: TEST_KEY });
     await store.saveCase(c);
     store.close();
 

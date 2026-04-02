@@ -4,21 +4,23 @@ import helmet from "helmet";
 import { ZodError, z } from "zod";
 import {
   type AuditTrailStore,
+  type ExternalAttachmentFetcher,
   type OperationsSummary,
-  PersonalDoctorDomainError,
-  type PersonalDoctorCase,
-  type PersonalDoctorStore,
+  AnamnesisDomainError,
+  type AnamnesisCase,
+  type AnamnesisStore,
   addArtifact,
   buildOperationsSummary,
   createAuditEvent,
   createCase,
   draftPhysicianPacket,
+  ingestFhirBundle,
   ingestFhirResource,
   finalizePhysicianPacket,
   ingestDocument,
   removeArtifact,
   submitReview,
-} from "../domain/personal-doctor";
+} from "../domain/anamnesis";
 
 const sourceDateSchema = z
   .string()
@@ -72,6 +74,14 @@ const fhirImportSchema = z.strictObject({
   resource: z.record(z.string(), z.unknown()),
 });
 
+const fhirBundleImportSchema = z.strictObject({
+  artifactType: z.enum(["note", "lab", "summary", "report", "imaging-summary"]).default("report"),
+  sourceDate: sourceDateSchema.optional(),
+  provenance: z.string().trim().min(1).max(300).optional(),
+  allowExternalAttachmentFetch: z.boolean().default(false),
+  resource: z.record(z.string(), z.unknown()),
+});
+
 const createPacketSchema = z.strictObject({
   requestedBy: z.string().trim().min(1).max(120).optional(),
   focus: z.string().trim().min(1).max(300).optional(),
@@ -89,11 +99,12 @@ const finalizePacketSchema = z.strictObject({
 });
 
 interface CreateAppDependencies {
-  store: PersonalDoctorStore;
+  store: AnamnesisStore;
   auditStore: AuditTrailStore;
   isShuttingDown?: () => boolean;
   authMiddleware?: (request: Request, response: Response, next: NextFunction) => void;
   rateLimitRpm?: number;
+  externalAttachmentFetcher?: ExternalAttachmentFetcher;
 }
 
 function readRouteParam(value: string | string[] | undefined): string {
@@ -112,7 +123,7 @@ function isMalformedJsonError(
 }
 
 async function loadOperationsSummary(
-  store: PersonalDoctorStore,
+  store: AnamnesisStore,
   auditStore: AuditTrailStore,
 ): Promise<OperationsSummary> {
   const cases = await store.listCases();
@@ -122,36 +133,36 @@ async function loadOperationsSummary(
 
 function renderMetrics(summary: OperationsSummary): string {
   const lines = [
-    "# HELP personal_doctor_cases_total Total number of personal doctor cases.",
-    "# TYPE personal_doctor_cases_total gauge",
-    `personal_doctor_cases_total ${summary.totalCases}`,
-    "# HELP personal_doctor_artifacts_total Total number of registered source artifacts.",
-    "# TYPE personal_doctor_artifacts_total gauge",
-    `personal_doctor_artifacts_total ${summary.totalArtifacts}`,
-    "# HELP personal_doctor_packets_total Total number of physician packet drafts.",
-    "# TYPE personal_doctor_packets_total gauge",
-    `personal_doctor_packets_total ${summary.totalPackets}`,
-    "# HELP personal_doctor_reviews_total Total number of clinician review entries.",
-    "# TYPE personal_doctor_reviews_total gauge",
-    `personal_doctor_reviews_total ${summary.totalReviews}`,
-    "# HELP personal_doctor_finalized_packets_total Total number of finalized physician packets.",
-    "# TYPE personal_doctor_finalized_packets_total gauge",
-    `personal_doctor_finalized_packets_total ${summary.totalFinalizedPackets}`,
-    "# HELP personal_doctor_audit_events_total Total number of audit trail events.",
-    "# TYPE personal_doctor_audit_events_total gauge",
-    `personal_doctor_audit_events_total ${summary.totalAuditEvents}`,
-    "# HELP personal_doctor_cases_by_status Total cases by workflow status.",
-    "# TYPE personal_doctor_cases_by_status gauge",
+    "# HELP anamnesis_cases_total Total number of anamnesis cases.",
+    "# TYPE anamnesis_cases_total gauge",
+    `anamnesis_cases_total ${summary.totalCases}`,
+    "# HELP anamnesis_artifacts_total Total number of registered source artifacts.",
+    "# TYPE anamnesis_artifacts_total gauge",
+    `anamnesis_artifacts_total ${summary.totalArtifacts}`,
+    "# HELP anamnesis_packets_total Total number of physician packet drafts.",
+    "# TYPE anamnesis_packets_total gauge",
+    `anamnesis_packets_total ${summary.totalPackets}`,
+    "# HELP anamnesis_reviews_total Total number of clinician review entries.",
+    "# TYPE anamnesis_reviews_total gauge",
+    `anamnesis_reviews_total ${summary.totalReviews}`,
+    "# HELP anamnesis_finalized_packets_total Total number of finalized physician packets.",
+    "# TYPE anamnesis_finalized_packets_total gauge",
+    `anamnesis_finalized_packets_total ${summary.totalFinalizedPackets}`,
+    "# HELP anamnesis_audit_events_total Total number of audit trail events.",
+    "# TYPE anamnesis_audit_events_total gauge",
+    `anamnesis_audit_events_total ${summary.totalAuditEvents}`,
+    "# HELP anamnesis_cases_by_status Total cases by workflow status.",
+    "# TYPE anamnesis_cases_by_status gauge",
   ];
 
   for (const [status, count] of Object.entries(summary.statusCounts)) {
-    lines.push(`personal_doctor_cases_by_status{status="${status}"} ${count}`);
+    lines.push(`anamnesis_cases_by_status{status="${status}"} ${count}`);
   }
 
   return `${lines.join("\n")}\n`;
 }
 
-export function createApp({ store, auditStore, isShuttingDown, authMiddleware, rateLimitRpm }: CreateAppDependencies) {
+export function createApp({ store, auditStore, isShuttingDown, authMiddleware, rateLimitRpm, externalAttachmentFetcher }: CreateAppDependencies) {
   const app = express();
   const parseJson = express.json({ limit: "256kb" });
 
@@ -328,6 +339,43 @@ export function createApp({ store, auditStore, isShuttingDown, authMiddleware, r
       artifact: result.artifact,
       ingestion: result.ingestion,
       fhirImport: result.fhirImport,
+    });
+  });
+
+  app.post("/api/cases/:caseId/fhir-bundle-imports", parseJson, async (request, response) => {
+    const record = await store.getCase(readRouteParam(request.params.caseId));
+    if (!record) {
+      response.status(404).json({
+        code: "case_not_found",
+        message: "Case not found.",
+      });
+      return;
+    }
+
+    const input = fhirBundleImportSchema.parse(request.body ?? {});
+    const result = await ingestFhirBundle(record, input, {
+      externalAttachmentFetcher,
+    });
+    await store.saveCase(result.nextCase);
+    await auditStore.append(
+      createAuditEvent({
+        caseId: result.nextCase.caseId,
+        eventType: "fhir.bundle.imported",
+        action: "import_fhir_bundle",
+        occurredAt: result.artifacts[0]?.createdAt ?? result.nextCase.updatedAt,
+        details: {
+          artifactCount: result.artifacts.length,
+          bundleType: result.bundleImport.bundleType,
+          usedExternalAttachmentFetch: result.bundleImport.usedExternalAttachmentFetch,
+          truncatedCount: result.ingestions.filter((ingestion) => ingestion.truncated).length,
+        },
+      }),
+    );
+    response.status(201).json({
+      case: result.nextCase,
+      artifacts: result.artifacts,
+      ingestions: result.ingestions,
+      bundleImport: result.bundleImport,
     });
   });
 
@@ -594,7 +642,7 @@ export function createApp({ store, auditStore, isShuttingDown, authMiddleware, r
       return;
     }
 
-    if (error instanceof PersonalDoctorDomainError) {
+    if (error instanceof AnamnesisDomainError) {
       response.status(error.statusCode).json({
         code: error.code,
         message: error.message,

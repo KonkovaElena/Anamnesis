@@ -10,8 +10,8 @@ import {
   draftPhysicianPacket,
   finalizePhysicianPacket,
   submitReview,
-  type PersonalDoctorCase,
-} from "../src/domain/personal-doctor";
+  type AnamnesisCase,
+} from "../src/domain/anamnesis";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -52,7 +52,7 @@ async function jsonRequest<T>(
 }
 
 function seedCaseWithPacket(): {
-  record: PersonalDoctorCase;
+  record: AnamnesisCase;
   packetId: string;
 } {
   let record = createCase({
@@ -449,6 +449,6 @@ test("reviews metric appears in /metrics output after a review is submitted", as
     const metricsResponse = await fetch(`${baseUrl}/metrics`);
     const body = await metricsResponse.text();
 
-    assert.ok(body.includes("personal_doctor_reviews_total 1"));
+    assert.ok(body.includes("anamnesis_reviews_total 1"));
   });
 });

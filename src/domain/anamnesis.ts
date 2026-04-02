@@ -5,6 +5,7 @@ export type ArtifactType = "note" | "lab" | "summary" | "report" | "imaging-summ
 export type DocumentContentType = "text/plain" | "text/markdown";
 export type FhirTransportContentType = "application/fhir+json";
 export type FhirImportResourceType = "Binary" | "DocumentReference";
+export type FhirBundleType = "document" | "collection";
 export type PhysicianPacketStatus = "DRAFT_REVIEW_REQUIRED" | "CLINICIAN_APPROVED" | "CHANGES_REQUESTED" | "REJECTED" | "FINALIZED";
 export type ReviewAction = "approved" | "changes_requested" | "rejected";
 export type AuditEventType =
@@ -13,6 +14,7 @@ export type AuditEventType =
   | "artifact.removed"
   | "document.ingested"
   | "fhir.imported"
+  | "fhir.bundle.imported"
   | "packet.drafted"
   | "review.submitted"
   | "packet.finalized"
@@ -75,6 +77,14 @@ export interface FhirImportInput {
   resource: Record<string, unknown>;
 }
 
+export interface FhirBundleImportInput {
+  artifactType?: ArtifactType;
+  sourceDate?: string;
+  provenance?: string;
+  allowExternalAttachmentFetch?: boolean;
+  resource: Record<string, unknown>;
+}
+
 export interface FhirImportResult {
   resourceType: FhirImportResourceType;
   transportContentType: FhirTransportContentType;
@@ -82,6 +92,21 @@ export interface FhirImportResult {
   title: string;
   sourceDate?: string;
 }
+
+export interface FhirBundleImportResult {
+  resourceType: "Bundle";
+  bundleType: FhirBundleType;
+  artifactCount: number;
+  transportContentType: FhirTransportContentType;
+  usedExternalAttachmentFetch: boolean;
+}
+
+export interface ExternalAttachmentFetchResult {
+  contentType: string;
+  content: string;
+}
+
+export type ExternalAttachmentFetcher = (url: string) => Promise<ExternalAttachmentFetchResult>;
 
 export interface PhysicianPacketSection {
   label: string;
@@ -144,7 +169,7 @@ export interface AuditEventRecord {
   details?: Record<string, string | number | boolean | null>;
 }
 
-export interface PersonalDoctorCase {
+export interface AnamnesisCase {
   caseId: string;
   patientLabel?: string;
   status: CaseStatus;
@@ -166,10 +191,10 @@ export interface OperationsSummary {
   lastUpdatedAt: string | null;
 }
 
-export interface PersonalDoctorStore {
-  listCases(): Promise<PersonalDoctorCase[]>;
-  getCase(caseId: string): Promise<PersonalDoctorCase | undefined>;
-  saveCase(nextCase: PersonalDoctorCase): Promise<void>;
+export interface AnamnesisStore {
+  listCases(): Promise<AnamnesisCase[]>;
+  getCase(caseId: string): Promise<AnamnesisCase | undefined>;
+  saveCase(nextCase: AnamnesisCase): Promise<void>;
   deleteCase(caseId: string): Promise<boolean>;
 }
 
@@ -179,14 +204,14 @@ export interface AuditTrailStore {
   countEvents(): Promise<number>;
 }
 
-export class PersonalDoctorDomainError extends Error {
+export class AnamnesisDomainError extends Error {
   constructor(
     readonly code: string,
     readonly statusCode: number,
     message: string,
   ) {
     super(message);
-    this.name = "PersonalDoctorDomainError";
+    this.name = "AnamnesisDomainError";
   }
 }
 
@@ -280,7 +305,7 @@ function deriveSourceDate(value: string | undefined): string | undefined {
 function decodeBase64Utf8(value: string): string {
   const normalized = value.replace(/\s+/g, "");
   if (normalized.length === 0 || normalized.length % 4 === 1 || /[^A-Za-z0-9+/=]/.test(normalized)) {
-    throw new PersonalDoctorDomainError(
+    throw new AnamnesisDomainError(
       "fhir_import_invalid_base64",
       400,
       "FHIR import requires valid base64-encoded inline text data.",
@@ -290,7 +315,7 @@ function decodeBase64Utf8(value: string): string {
   const decoded = Buffer.from(normalized, "base64");
   const roundTrip = decoded.toString("base64").replace(/=+$/u, "");
   if (roundTrip !== normalized.replace(/=+$/u, "")) {
-    throw new PersonalDoctorDomainError(
+    throw new AnamnesisDomainError(
       "fhir_import_invalid_base64",
       400,
       "FHIR import requires valid base64-encoded inline text data.",
@@ -300,7 +325,7 @@ function decodeBase64Utf8(value: string): string {
   try {
     return UTF8_TEXT_DECODER.decode(decoded);
   } catch {
-    throw new PersonalDoctorDomainError(
+    throw new AnamnesisDomainError(
       "fhir_import_invalid_utf8",
       400,
       "FHIR import only accepts UTF-8 text attachments in this slice.",
@@ -310,6 +335,10 @@ function decodeBase64Utf8(value: string): string {
 
 function appendFhirProvenance(existing: string | undefined, resourceType: FhirImportResourceType): string {
   return existing ? `${existing}; fhir-import:${resourceType}` : `fhir-import:${resourceType}`;
+}
+
+function appendProvenance(existing: string | undefined, detail: string): string {
+  return existing ? `${existing}; ${detail}` : detail;
 }
 
 interface ParsedFhirImport {
@@ -322,10 +351,23 @@ interface ParsedFhirImport {
   textContent: string;
 }
 
+interface ParsedBundleImport {
+  bundleType: FhirBundleType;
+  entries: ParsedFhirImport[];
+  usedExternalAttachmentFetch: boolean;
+}
+
+interface BundleDocumentReferenceAttachment {
+  contentType?: DocumentContentType;
+  url: string;
+  title?: string;
+  creation?: string;
+}
+
 function parseBinaryImport(input: FhirImportInput): ParsedFhirImport {
   const sourceContentType = parseDocumentContentType(readOptionalString(input.resource.contentType));
   if (!sourceContentType) {
-    throw new PersonalDoctorDomainError(
+    throw new AnamnesisDomainError(
       "fhir_import_content_type_unsupported",
       400,
       "FHIR Binary import only supports text/plain or text/markdown content in this slice.",
@@ -334,7 +376,7 @@ function parseBinaryImport(input: FhirImportInput): ParsedFhirImport {
 
   const data = readOptionalString(input.resource.data);
   if (!data) {
-    throw new PersonalDoctorDomainError(
+    throw new AnamnesisDomainError(
       "fhir_import_requires_inline_data",
       400,
       "FHIR import requires inline attachment data. External dereference is out of scope.",
@@ -355,7 +397,7 @@ function parseBinaryImport(input: FhirImportInput): ParsedFhirImport {
 function parseDocumentReferenceImport(input: FhirImportInput): ParsedFhirImport {
   const content = input.resource.content;
   if (!Array.isArray(content) || content.length === 0) {
-    throw new PersonalDoctorDomainError(
+    throw new AnamnesisDomainError(
       "fhir_import_requires_inline_data",
       400,
       "FHIR import requires an inline text attachment on DocumentReference.content.",
@@ -402,7 +444,7 @@ function parseDocumentReferenceImport(input: FhirImportInput): ParsedFhirImport 
 
   if (!selectedContentType || !selectedData) {
     if (sawUnsupportedContentType || sawInlineData) {
-      throw new PersonalDoctorDomainError(
+      throw new AnamnesisDomainError(
         "fhir_import_content_type_unsupported",
         400,
         "FHIR DocumentReference import only supports inline text/plain or text/markdown attachments in this slice.",
@@ -410,14 +452,14 @@ function parseDocumentReferenceImport(input: FhirImportInput): ParsedFhirImport 
     }
 
     if (sawExternalUrl) {
-      throw new PersonalDoctorDomainError(
+      throw new AnamnesisDomainError(
         "fhir_import_requires_inline_data",
         400,
         "FHIR import requires inline attachment data. External dereference is out of scope.",
       );
     }
 
-    throw new PersonalDoctorDomainError(
+    throw new AnamnesisDomainError(
       "fhir_import_requires_inline_data",
       400,
       "FHIR import requires an inline text attachment on DocumentReference.content.",
@@ -451,14 +493,215 @@ function parseFhirImport(input: FhirImportInput): ParsedFhirImport {
     return parseDocumentReferenceImport(input);
   }
 
-  throw new PersonalDoctorDomainError(
+  throw new AnamnesisDomainError(
     "fhir_import_resource_unsupported",
     400,
     "FHIR import only supports Binary and DocumentReference resources in this slice.",
   );
 }
 
-function buildPacketFingerprint(record: PersonalDoctorCase, packet: PhysicianPacket): string {
+function findExternalDocumentReferenceAttachment(
+  resource: Record<string, unknown>,
+): BundleDocumentReferenceAttachment | undefined {
+  const content = resource.content;
+  if (!Array.isArray(content)) {
+    return undefined;
+  }
+
+  for (const item of content) {
+    if (!isRecord(item) || !isRecord(item.attachment)) {
+      continue;
+    }
+
+    const attachment = item.attachment;
+    const url = readOptionalString(attachment.url);
+    if (!url) {
+      continue;
+    }
+
+    return {
+      contentType: parseDocumentContentType(readOptionalString(attachment.contentType)),
+      url,
+      title: readOptionalString(attachment.title),
+      creation: readOptionalString(attachment.creation),
+    };
+  }
+
+  return undefined;
+}
+
+async function parseDocumentReferenceImportFromExternalAttachment(
+  input: FhirBundleImportInput,
+  resource: Record<string, unknown>,
+  entryIndex: number,
+  externalAttachmentFetcher: ExternalAttachmentFetcher,
+): Promise<ParsedFhirImport> {
+  const attachment = findExternalDocumentReferenceAttachment(resource);
+  if (!attachment) {
+    throw new AnamnesisDomainError(
+      "fhir_import_requires_inline_data",
+      400,
+      "FHIR import requires inline attachment data. External dereference is out of scope.",
+    );
+  }
+
+  const fetchedAttachment = await externalAttachmentFetcher(attachment.url).catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : "External attachment fetch failed.";
+    throw new AnamnesisDomainError(
+      "fhir_import_external_fetch_failed",
+      400,
+      message,
+    );
+  });
+
+  const sourceContentType = parseDocumentContentType(fetchedAttachment.contentType) ?? attachment.contentType;
+  if (!sourceContentType) {
+    throw new AnamnesisDomainError(
+      "fhir_import_content_type_unsupported",
+      400,
+      "FHIR DocumentReference import only supports text/plain or text/markdown attachments in this slice.",
+    );
+  }
+
+  return {
+    artifactType: input.artifactType ?? "report",
+    title:
+      readOptionalString(resource.description) ??
+      attachment.title ??
+      "FHIR DocumentReference import",
+    sourceDate:
+      input.sourceDate ??
+      deriveSourceDate(readOptionalString(resource.date)) ??
+      deriveSourceDate(attachment.creation),
+    provenance: appendProvenance(
+      appendProvenance(
+        appendFhirProvenance(input.provenance, "DocumentReference"),
+        `bundle-entry:${entryIndex}`,
+      ),
+      `attachment-url:${attachment.url}`,
+    ),
+    resourceType: "DocumentReference",
+    sourceContentType,
+    textContent: fetchedAttachment.content,
+  };
+}
+
+async function parseFhirBundle(
+  input: FhirBundleImportInput,
+  dependencies?: { externalAttachmentFetcher?: ExternalAttachmentFetcher },
+): Promise<ParsedBundleImport> {
+  if (readOptionalString(input.resource.resourceType) !== "Bundle") {
+    throw new AnamnesisDomainError(
+      "fhir_import_resource_unsupported",
+      400,
+      "FHIR Bundle import requires a Bundle resource in this slice.",
+    );
+  }
+
+  const bundleType = readOptionalString(input.resource.type);
+  if (bundleType !== "document" && bundleType !== "collection") {
+    throw new AnamnesisDomainError(
+      "fhir_import_bundle_type_unsupported",
+      400,
+      "FHIR Bundle import only supports document or collection bundle types in this slice.",
+    );
+  }
+
+  const entries = input.resource.entry;
+  if (!Array.isArray(entries) || entries.length === 0) {
+    throw new AnamnesisDomainError(
+      "fhir_import_bundle_empty",
+      400,
+      "FHIR Bundle import requires at least one entry resource in this slice.",
+    );
+  }
+
+  const parsedEntries: ParsedFhirImport[] = [];
+  let usedExternalAttachmentFetch = false;
+
+  for (let entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
+    const entry = entries[entryIndex];
+    if (!isRecord(entry) || !isRecord(entry.resource)) {
+      continue;
+    }
+
+    const resource = entry.resource;
+    const resourceType = readOptionalString(resource.resourceType);
+    const provenance = appendProvenance(input.provenance, `bundle-entry:${entryIndex}`);
+
+    if (resourceType === "Binary") {
+      parsedEntries.push(
+        parseBinaryImport({
+          artifactType: input.artifactType,
+          sourceDate: input.sourceDate,
+          provenance,
+          resource,
+        }),
+      );
+      continue;
+    }
+
+    if (resourceType !== "DocumentReference") {
+      continue;
+    }
+
+    try {
+      parsedEntries.push(
+        parseDocumentReferenceImport({
+          artifactType: input.artifactType,
+          sourceDate: input.sourceDate,
+          provenance,
+          resource,
+        }),
+      );
+      continue;
+    } catch (error: unknown) {
+      if (!(error instanceof AnamnesisDomainError)) {
+        throw error;
+      }
+
+      if (
+        error.code !== "fhir_import_requires_inline_data"
+        || !input.allowExternalAttachmentFetch
+        || !dependencies?.externalAttachmentFetcher
+      ) {
+        throw error;
+      }
+    }
+
+    parsedEntries.push(
+      await parseDocumentReferenceImportFromExternalAttachment(
+        {
+          artifactType: input.artifactType,
+          sourceDate: input.sourceDate,
+          provenance,
+          allowExternalAttachmentFetch: input.allowExternalAttachmentFetch,
+          resource: input.resource,
+        },
+        resource,
+        entryIndex,
+        dependencies.externalAttachmentFetcher,
+      ),
+    );
+    usedExternalAttachmentFetch = true;
+  }
+
+  if (parsedEntries.length === 0) {
+    throw new AnamnesisDomainError(
+      "fhir_import_bundle_empty",
+      400,
+      "FHIR Bundle import requires at least one supported Binary or DocumentReference entry in this slice.",
+    );
+  }
+
+  return {
+    bundleType,
+    entries: parsedEntries,
+    usedExternalAttachmentFetch,
+  };
+}
+
+function buildPacketFingerprint(record: AnamnesisCase, packet: PhysicianPacket): string {
   const snapshot = {
     caseId: record.caseId,
     packetId: packet.packetId,
@@ -484,7 +727,7 @@ function buildPacketFingerprint(record: PersonalDoctorCase, packet: PhysicianPac
   return createHash("sha256").update(JSON.stringify(snapshot)).digest("hex");
 }
 
-export function createCase(input: CreateCaseInput, now = new Date()): PersonalDoctorCase {
+export function createCase(input: CreateCaseInput, now = new Date()): AnamnesisCase {
   const timestamp = toIso(now);
   return {
     caseId: randomUUID(),
@@ -504,10 +747,10 @@ export function createCase(input: CreateCaseInput, now = new Date()): PersonalDo
 }
 
 export function addArtifact(
-  record: PersonalDoctorCase,
+  record: AnamnesisCase,
   input: AddArtifactInput,
   now = new Date(),
-): PersonalDoctorCase {
+): AnamnesisCase {
   const updatedAt = toIso(now);
   const artifact: SourceArtifact = {
     artifactId: randomUUID(),
@@ -539,13 +782,13 @@ export function addArtifact(
 }
 
 export function ingestDocument(
-  record: PersonalDoctorCase,
+  record: AnamnesisCase,
   input: IngestDocumentInput,
   now = new Date(),
-): { nextCase: PersonalDoctorCase; artifact: SourceArtifact; ingestion: DocumentIngestionResult } {
+): { nextCase: AnamnesisCase; artifact: SourceArtifact; ingestion: DocumentIngestionResult } {
   const normalized = normalizeDocumentText(input.content);
   if (normalized.length === 0) {
-    throw new PersonalDoctorDomainError(
+    throw new AnamnesisDomainError(
       "document_content_empty",
       400,
       "Document content must contain at least one non-whitespace character.",
@@ -567,7 +810,7 @@ export function ingestDocument(
 
   const artifact = nextCase.artifacts.at(-1);
   if (!artifact) {
-    throw new PersonalDoctorDomainError(
+    throw new AnamnesisDomainError(
       "artifact_creation_failed",
       500,
       "Document ingestion did not create a source artifact.",
@@ -588,11 +831,11 @@ export function ingestDocument(
 }
 
 export function ingestFhirResource(
-  record: PersonalDoctorCase,
+  record: AnamnesisCase,
   input: FhirImportInput,
   now = new Date(),
 ): {
-  nextCase: PersonalDoctorCase;
+  nextCase: AnamnesisCase;
   artifact: SourceArtifact;
   ingestion: DocumentIngestionResult;
   fhirImport: FhirImportResult;
@@ -623,8 +866,57 @@ export function ingestFhirResource(
   };
 }
 
+export async function ingestFhirBundle(
+  record: AnamnesisCase,
+  input: FhirBundleImportInput,
+  dependencies?: { externalAttachmentFetcher?: ExternalAttachmentFetcher },
+  now = new Date(),
+): Promise<{
+  nextCase: AnamnesisCase;
+  artifacts: SourceArtifact[];
+  ingestions: DocumentIngestionResult[];
+  bundleImport: FhirBundleImportResult;
+}> {
+  const parsedBundle = await parseFhirBundle(input, dependencies);
+  let nextCase = record;
+  const artifacts: SourceArtifact[] = [];
+  const ingestions: DocumentIngestionResult[] = [];
+
+  for (const parsedEntry of parsedBundle.entries) {
+    const result = ingestDocument(
+      nextCase,
+      {
+        artifactType: parsedEntry.artifactType,
+        title: parsedEntry.title,
+        contentType: parsedEntry.sourceContentType,
+        content: parsedEntry.textContent,
+        sourceDate: parsedEntry.sourceDate,
+        provenance: parsedEntry.provenance,
+      },
+      now,
+    );
+
+    nextCase = result.nextCase;
+    artifacts.push(result.artifact);
+    ingestions.push(result.ingestion);
+  }
+
+  return {
+    nextCase,
+    artifacts,
+    ingestions,
+    bundleImport: {
+      resourceType: "Bundle",
+      bundleType: parsedBundle.bundleType,
+      artifactCount: artifacts.length,
+      transportContentType: "application/fhir+json",
+      usedExternalAttachmentFetch: parsedBundle.usedExternalAttachmentFetch,
+    },
+  };
+}
+
 function buildPacketSections(
-  record: PersonalDoctorCase,
+  record: AnamnesisCase,
   input: CreatePhysicianPacketInput,
 ): PhysicianPacketSection[] {
   const questions = record.intake.questionsForClinician.length
@@ -669,12 +961,12 @@ function buildPacketSections(
 }
 
 export function draftPhysicianPacket(
-  record: PersonalDoctorCase,
+  record: AnamnesisCase,
   input: CreatePhysicianPacketInput,
   now = new Date(),
-): { nextCase: PersonalDoctorCase; packet: PhysicianPacket } {
+): { nextCase: AnamnesisCase; packet: PhysicianPacket } {
   if (record.artifacts.length === 0) {
-    throw new PersonalDoctorDomainError(
+    throw new AnamnesisDomainError(
       "packet_requires_artifact",
       409,
       "At least one source artifact must be registered before a physician packet can be drafted.",
@@ -707,13 +999,13 @@ export function draftPhysicianPacket(
 }
 
 export function removeArtifact(
-  record: PersonalDoctorCase,
+  record: AnamnesisCase,
   artifactId: string,
   now = new Date(),
-): PersonalDoctorCase {
+): AnamnesisCase {
   const index = record.artifacts.findIndex((a) => a.artifactId === artifactId);
   if (index === -1) {
-    throw new PersonalDoctorDomainError(
+    throw new AnamnesisDomainError(
       "artifact_not_found",
       404,
       "Artifact not found.",
@@ -748,7 +1040,7 @@ export function removeArtifact(
 }
 
 export function buildOperationsSummary(
-  cases: PersonalDoctorCase[],
+  cases: AnamnesisCase[],
   options?: { totalAuditEvents?: number },
 ): OperationsSummary {
   const statusCounts: Record<CaseStatus, number> = {
@@ -817,14 +1109,14 @@ const REVIEW_ACTION_TO_STATUS: Record<ReviewAction, PhysicianPacketStatus> = {
 };
 
 export function submitReview(
-  record: PersonalDoctorCase,
+  record: AnamnesisCase,
   packetId: string,
   input: SubmitReviewInput,
   now = new Date(),
-): { nextCase: PersonalDoctorCase; review: ClinicalReviewEntry } {
+): { nextCase: AnamnesisCase; review: ClinicalReviewEntry } {
   const packetIndex = record.physicianPackets.findIndex((p) => p.packetId === packetId);
   if (packetIndex === -1) {
-    throw new PersonalDoctorDomainError(
+    throw new AnamnesisDomainError(
       "packet_not_found",
       404,
       "Physician packet not found.",
@@ -834,7 +1126,7 @@ export function submitReview(
   const packet = record.physicianPackets[packetIndex]!;
 
   if (packet.status === "CLINICIAN_APPROVED") {
-    throw new PersonalDoctorDomainError(
+    throw new AnamnesisDomainError(
       "packet_already_approved",
       409,
       "Cannot review a packet that has already been approved.",
@@ -842,7 +1134,7 @@ export function submitReview(
   }
 
   if (packet.status === "FINALIZED") {
-    throw new PersonalDoctorDomainError(
+    throw new AnamnesisDomainError(
       "packet_already_finalized",
       409,
       "Cannot review a packet that has already been finalized.",
@@ -877,14 +1169,14 @@ export function submitReview(
 }
 
 export function finalizePhysicianPacket(
-  record: PersonalDoctorCase,
+  record: AnamnesisCase,
   packetId: string,
   input: FinalizePacketInput,
   now = new Date(),
-): { nextCase: PersonalDoctorCase; packet: PhysicianPacket } {
+): { nextCase: AnamnesisCase; packet: PhysicianPacket } {
   const packetIndex = record.physicianPackets.findIndex((packet) => packet.packetId === packetId);
   if (packetIndex === -1) {
-    throw new PersonalDoctorDomainError(
+    throw new AnamnesisDomainError(
       "packet_not_found",
       404,
       "Physician packet not found.",
@@ -893,7 +1185,7 @@ export function finalizePhysicianPacket(
 
   const packet = record.physicianPackets[packetIndex]!;
   if (packet.status === "FINALIZED") {
-    throw new PersonalDoctorDomainError(
+    throw new AnamnesisDomainError(
       "packet_already_finalized",
       409,
       "Packet has already been finalized.",
@@ -901,7 +1193,7 @@ export function finalizePhysicianPacket(
   }
 
   if (packet.isStale) {
-    throw new PersonalDoctorDomainError(
+    throw new AnamnesisDomainError(
       "packet_stale",
       409,
       "Packet must be regenerated before finalization because it is stale.",
@@ -909,7 +1201,7 @@ export function finalizePhysicianPacket(
   }
 
   if (packet.status !== "CLINICIAN_APPROVED") {
-    throw new PersonalDoctorDomainError(
+    throw new AnamnesisDomainError(
       "packet_not_ready_for_finalization",
       409,
       "Only clinician-approved packets can be finalized.",

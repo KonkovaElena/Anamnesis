@@ -1,9 +1,9 @@
 ---
-title: "Personal Doctor Regulatory Positioning"
+title: "Anamnesis Regulatory Positioning"
 status: active
-version: "0.9.0"
-last_updated: "2026-03-31"
-tags: [personal-doctor, healthcare, regulatory, explanation]
+version: "1.0.0"
+last_updated: "2026-04-01"
+tags: [anamnesis, healthcare, regulatory, explanation]
 ---
 
 # Regulatory Positioning
@@ -27,3 +27,5 @@ The standalone is intentionally framed as a clinician-in-the-loop workflow basel
 ## Current Rule
 
 Do not describe the project as an autonomous doctor, diagnostic engine, or validated clinical system.
+
+Bounded FHIR Bundle ingestion and gated remote attachment fetch do not change that rule: they extend workflow intake only and still produce draft organizational artifacts for clinician review.

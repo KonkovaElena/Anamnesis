@@ -1,9 +1,9 @@
 ---
-title: "Personal Doctor Claim Boundary"
+title: "Anamnesis Claim Boundary"
 status: active
-version: "0.9.0"
-last_updated: "2026-03-31"
-tags: [personal-doctor, healthcare, claim-boundary, reference]
+version: "1.0.0"
+last_updated: "2026-04-01"
+tags: [anamnesis, healthcare, claim-boundary, reference]
 ---
 
 # Claim Boundary
@@ -14,6 +14,8 @@ tags: [personal-doctor, healthcare, claim-boundary, reference]
 - it registers source artifacts (with future-date rejection);
 - it ingests bounded `text/plain` and `text/markdown` documents into source artifacts;
 - it imports inline FHIR `Binary` and `DocumentReference` resources that carry `text/plain` or `text/markdown` payloads into source artifacts;
+- it imports bounded FHIR `Bundle` resources of type `document` or `collection` into source artifacts;
+- it can dereference `DocumentReference.content.attachment.url` only when the bundle import request explicitly opts in and the fetched response remains bounded `https` text content;
 - it supports artifact and case deletion;
 - it drafts physician packets from currently stored case data;
 - it records explicit clinician reviews on physician packets;
@@ -33,8 +35,8 @@ tags: [personal-doctor, healthcare, claim-boundary, reference]
 - prescription logic;
 - multipart upload or OCR document ingestion;
 - FHIR REST server behavior;
-- FHIR Bundle import or transaction handling;
-- external Binary or `attachment.url` dereference;
+- FHIR transaction handling;
+- external Binary dereference or ungated `attachment.url` dereference;
 - medical sign-off or legal attestation.
 
 ## Required Language

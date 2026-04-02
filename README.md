@@ -1,6 +1,6 @@
-# Personal Doctor
+# Anamnesis
 
-Clinician-in-the-loop personal health control plane bootstrap for the project title "Личный врач".
+Clinician-in-the-loop personal health control plane bootstrap for Anamnesis.
 
 This repository is not an AI doctor.
 
@@ -23,6 +23,8 @@ It implements a narrow workflow baseline that helps a user organize case intake,
 - source artifact registration (with future-date rejection);
 - bounded text document ingestion (`text/plain`, `text/markdown`) into source artifacts;
 - bounded FHIR-compatible import seam for inline `Binary` and `DocumentReference` resources carrying `text/plain` or `text/markdown` payloads into source artifacts;
+- bounded FHIR Bundle import seam for `document` or `collection` bundles that extract supported `Binary` and `DocumentReference` entries into source artifacts;
+- explicit, gated `attachment.url` dereference over `https` for `text/plain` and `text/markdown` bundle attachments;
 - artifact and case deletion;
 - physician packet draft generation;
 - explicit clinician review ledger (approved / changes_requested / rejected);
@@ -57,6 +59,16 @@ npm run dev
 
 Default runtime port: `4020`
 
+## Contributing And Support
+
+- Contribution guidelines: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Code of conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- Security reporting: [SECURITY.md](SECURITY.md)
+- Release history: [CHANGELOG.md](CHANGELOG.md)
+- GitHub publication checklist: [PUBLISHING.md](PUBLISHING.md)
+
+For bug reports, feature requests, and usage questions, use the repository issue forms after the project is published to GitHub.
+
 ## Environment Variables
 
 | Variable | Required | Default | Description |
@@ -64,7 +76,7 @@ Default runtime port: `4020`
 | `PORT` | No | `4020` | HTTP listen port |
 | `API_KEY` | No | — | Bearer token for API authentication. When unset, all endpoints are unauthenticated (dev mode). |
 | `RATE_LIMIT_RPM` | No | `0` (disabled) | Maximum requests per minute per IP. Health and readiness probes are exempt. |
-| `STORE_PATH` | No | — | Path to SQLite database file (e.g. `./data/personal-doctor.db`). When unset, data is stored in memory only. |
+| `STORE_PATH` | No | — | Path to SQLite database file (e.g. `./data/anamnesis.db`). When unset, data is stored in memory only. |
 | `ENCRYPTION_KEY` | When `STORE_PATH` is set | — | 64-character hex string (256-bit AES key). Generate with: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
 
 ## API Surface
@@ -75,6 +87,7 @@ Default runtime port: `4020`
 - `POST /api/cases/:caseId/artifacts`
 - `POST /api/cases/:caseId/document-ingestions`
 - `POST /api/cases/:caseId/fhir-imports`
+- `POST /api/cases/:caseId/fhir-bundle-imports`
 - `DELETE /api/cases/:caseId/artifacts/:artifactId`
 - `POST /api/cases/:caseId/physician-packets`
 - `GET /api/cases/:caseId/physician-packets`
@@ -121,7 +134,7 @@ The status model is intentionally narrow and never implies medical finality.
 
 This standalone repository keeps its design, scope, and evidence surfaces locally.
 
-The current documentation set is a normalized March 31, 2026 snapshot prepared so the project can move independently from the parent monorepo.
+The current documentation set is a normalized April 1, 2026 snapshot prepared so the project can move independently from the parent monorepo.
 
 ## Claim Boundary
 
@@ -163,4 +176,4 @@ The server applies the following hardening defaults:
 
 - **No PII encryption at transit.** HTTPS must be enforced at the reverse-proxy layer for any deployment beyond localhost.
 - **No multipart upload or OCR pipeline.** The document-ingestion seam is intentionally bounded to JSON requests that normalize `text/plain` and `text/markdown` content into source artifacts.
-- **No general-purpose FHIR server behavior.** The FHIR import seam is intentionally bounded to `POST /api/cases/:caseId/fhir-imports` wrapper requests that accept only inline `Binary` and `DocumentReference` resources with `text/plain` or `text/markdown` payloads. Bundle transactions, generic resource import, and external `attachment.url` dereference remain out of scope.
+- **No general-purpose FHIR server behavior.** The FHIR import seams are intentionally bounded to `POST /api/cases/:caseId/fhir-imports` for single inline resources and `POST /api/cases/:caseId/fhir-bundle-imports` for `document` or `collection` bundles. Transaction semantics, generic resource import, non-text media extraction, and ungated external dereference remain out of scope.

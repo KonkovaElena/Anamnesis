@@ -4,13 +4,13 @@ import { createServer } from "node:http";
 import { type AddressInfo } from "node:net";
 import test from "node:test";
 import { createApp } from "../src/application/create-app";
-import { InMemoryPersonalDoctorStore } from "../src/infrastructure/InMemoryPersonalDoctorStore";
+import { InMemoryAnamnesisStore } from "../src/infrastructure/InMemoryAnamnesisStore";
 
 async function withRateLimitedServer(
   maxRequests: number,
   run: (baseUrl: string) => Promise<void>,
 ) {
-  const store = new InMemoryPersonalDoctorStore();
+  const store = new InMemoryAnamnesisStore();
   const app = createApp({ store, rateLimitRpm: maxRequests });
   const server = createServer(app);
   server.listen(0, "127.0.0.1");

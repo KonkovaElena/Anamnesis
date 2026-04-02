@@ -1,9 +1,9 @@
 ---
-title: "Personal Doctor Status Model"
+title: "Anamnesis Status Model"
 status: active
-version: "0.9.0"
-last_updated: "2026-03-31"
-tags: [personal-doctor, healthcare, status-model, reference]
+version: "1.0.0"
+last_updated: "2026-04-01"
+tags: [anamnesis, healthcare, status-model, reference]
 ---
 
 # Status Model
@@ -30,9 +30,10 @@ tags: [personal-doctor, healthcare, status-model, reference]
 
 - Adding the first artifact: `INTAKING` → `READY_FOR_PACKET`.
 - Ingesting the first bounded document follows the same transition as adding the first artifact: `INTAKING` → `READY_FOR_PACKET`.
+- Importing the first bounded FHIR resource or Bundle follows the same transition as adding the first artifact: `INTAKING` → `READY_FOR_PACKET`.
 - Removing the last artifact: `READY_FOR_PACKET` → `INTAKING`.
 - Adding or removing artifacts marks existing physician packets as stale.
-- Ingesting a bounded document after packet draft also marks existing physician packets as stale because it creates a new source artifact.
+- Ingesting a bounded document or importing a bounded FHIR resource or Bundle after packet draft also marks existing physician packets as stale because it creates new source artifacts.
 - Drafting a physician packet: `READY_FOR_PACKET` → `REVIEW_REQUIRED`.
 - Reviewing or finalizing a physician packet updates packet state only; the case remains `REVIEW_REQUIRED`.
 - Removing all artifacts after packet history exists leaves the case in `REVIEW_REQUIRED` and marks existing packets stale.

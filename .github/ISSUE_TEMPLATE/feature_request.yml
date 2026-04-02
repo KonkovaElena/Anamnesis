@@ -1,0 +1,38 @@
+name: Feature request
+description: Propose a new capability or workflow improvement.
+title: "[Feature]: "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: What operator or workflow problem needs to be solved?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: Describe the smallest useful change.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Optional. Include rejected options if they influenced the request.
+  - type: textarea
+    id: boundary
+    attributes:
+      label: Scope and safety impact
+      description: Explain whether this changes current claim boundaries, interoperability scope, or security posture.
+      placeholder: No change to clinical claims; workflow-only enhancement.
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: This request does not assume diagnostic, treatment, or prescription capability without matching evidence and governance changes.
+          required: true

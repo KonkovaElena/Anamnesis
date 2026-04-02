@@ -67,7 +67,7 @@ async function main() {
   server.listen(port);
   await once(server, "listening");
 
-  process.stdout.write(`personal-doctor-control-plane listening on http://localhost:${port}\n`);
+  process.stdout.write(`anamnesis-control-plane listening on http://localhost:${port}\n`);
 }
 
 void main().catch((error) => {
