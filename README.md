@@ -6,34 +6,42 @@ This repository is not an AI doctor.
 
 It implements a narrow workflow baseline that helps a user organize case intake, supporting artifacts, and a physician-facing packet draft without claiming diagnosis, treatment, or prescription capability.
 
-## Stack (March 2026)
+## Public Repository Status
+
+- The repository is self-contained and no longer depends on a parent-monorepo export workflow.
+- Claim-boundary, roadmap, evidence, and investor diligence materials live in dedicated local docs rather than migration notes.
+- The April 3, 2026 documentation refresh synchronizes the public docs set with the current codebase, current official standards references, and current research-derived controls.
+- Declared runtime dependencies currently track: Express `^5.2.1`, Helmet `^8.1.0`, Zod `^4.3.6`, better-sqlite3 `^12.8.0`, tsx `^4.21.0`, and TypeScript `^6.0.2`.
+
+## Stack (April 2026 Baseline)
 
 | Technology | Version | Role |
 |---|---|---|
-| Node.js | >=24 LTS | Runtime |
-| TypeScript | 6.0 | Type system & compiler |
-| Express | 5.2 | HTTP framework |
-| Zod | 4.3 | Runtime input validation |
-| better-sqlite3 | 12.x | Durable SQLite persistence |
+| Node.js | `>=24` | Runtime |
+| TypeScript | `^6.0.2` | Type system and compiler |
+| Express | `^5.2.1` | HTTP framework |
+| Helmet | `^8.1.0` | Security headers |
+| Zod | `^4.3.6` | Input validation |
+| better-sqlite3 | `^12.8.0` | Durable SQLite persistence |
 | node:test | built-in | Test runner |
 
 ## Current Scope
 
 - structured case intake;
-- source artifact registration (with future-date rejection);
+- source artifact registration with future-date rejection;
 - bounded text document ingestion (`text/plain`, `text/markdown`) into source artifacts;
-- bounded FHIR-compatible import seam for inline `Binary` and `DocumentReference` resources carrying `text/plain` or `text/markdown` payloads into source artifacts;
-- bounded FHIR Bundle import seam for `document` or `collection` bundles that extract supported `Binary` and `DocumentReference` entries into source artifacts;
-- explicit, gated `attachment.url` dereference over `https` for `text/plain` and `text/markdown` bundle attachments;
+- bounded FHIR-compatible import seams for inline `Binary` and `DocumentReference` resources carrying `text/plain` or `text/markdown` payloads;
+- bounded FHIR Bundle import seam for `document` and `collection` bundles;
+- explicit, gated `attachment.url` dereference over `https` for bounded text bundle attachments;
 - artifact and case deletion;
 - physician packet draft generation;
-- explicit clinician review ledger (approved / changes_requested / rejected);
+- explicit clinician review ledger (`approved`, `changes_requested`, `rejected`);
 - physician packet finalization after clinician approval;
 - append-only per-case audit trail;
 - operations summary;
 - Bearer-token authentication (`API_KEY`);
 - per-IP sliding-window rate limiting (`RATE_LIMIT_RPM`);
-- security headers via Helmet (CSP, HSTS, COOP, CORP, Referrer-Policy, etc.);
+- security headers via Helmet;
 - graceful HTTP shutdown with connection draining;
 - durable SQLite persistence with AES-256-GCM encryption at rest;
 - `GET /healthz`, `GET /readyz`, and `GET /metrics`.
@@ -44,6 +52,7 @@ It implements a narrow workflow baseline that helps a user organize case intake,
 - medication or treatment advice;
 - clinical validation claims;
 - imaging, genomics, or wearable processing pipelines;
+- general-purpose FHIR server behavior;
 - EHR replacement.
 
 ## Quickstart
@@ -59,34 +68,15 @@ npm run dev
 
 Default runtime port: `4020`
 
-## Contributing And Support
-
-- Contribution guidelines: [CONTRIBUTING.md](CONTRIBUTING.md)
-- Code of conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
-- Security reporting: [SECURITY.md](SECURITY.md)
-- Citation metadata: [CITATION.cff](CITATION.cff)
-- Release history: [CHANGELOG.md](CHANGELOG.md)
-- GitHub publication checklist: [PUBLISHING.md](PUBLISHING.md)
-
-For bug reports, feature requests, and usage questions, use the repository issue forms after the project is published to GitHub.
-
-## Citation
-
-This repository ships with `CITATION.cff` so GitHub can render machine-readable software citation metadata.
-
-If you use Anamnesis in research, evaluation, or clinician-workflow studies, cite the versioned software artifact rather than mentioning the repository only in prose.
-
-For long-lived scholarly citation, archive a tagged release through Zenodo or another DOI-minting archive and then backfill the DOI into `CITATION.cff`.
-
 ## Environment Variables
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `PORT` | No | `4020` | HTTP listen port |
-| `API_KEY` | No | — | Bearer token for API authentication. When unset, all endpoints are unauthenticated (dev mode). |
-| `RATE_LIMIT_RPM` | No | `0` (disabled) | Maximum requests per minute per IP. Health and readiness probes are exempt. |
-| `STORE_PATH` | No | — | Path to SQLite database file (e.g. `./data/anamnesis.db`). When unset, data is stored in memory only. |
-| `ENCRYPTION_KEY` | When `STORE_PATH` is set | — | 64-character hex string (256-bit AES key). Generate with: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
+| `API_KEY` | No | — | Bearer token for API authentication. When unset, endpoints are unauthenticated for local development. |
+| `RATE_LIMIT_RPM` | No | `0` | Maximum requests per minute per IP. Health and readiness probes are exempt. |
+| `STORE_PATH` | No | — | Path to SQLite database file. When unset, data is stored in memory only. |
+| `ENCRYPTION_KEY` | When `STORE_PATH` is set | — | 64-character hex string used for AES-256-GCM encryption at rest. |
 
 ## API Surface
 
@@ -104,85 +94,37 @@ For long-lived scholarly citation, archive a tagged release through Zenodo or an
 - `GET /api/cases/:caseId/physician-packets/:packetId/reviews`
 - `POST /api/cases/:caseId/physician-packets/:packetId/finalize`
 - `GET /api/cases/:caseId/audit-events`
-- `DELETE /api/cases/:caseId`
 - `GET /api/operations/summary`
 - `GET /healthz`
 - `GET /readyz`
 - `GET /metrics`
 
-## Current Status Model
+OpenAPI description: [openapi.yaml](openapi.yaml)
 
-### Case Status
+## Documentation
 
-- `INTAKING`
-- `READY_FOR_PACKET`
-- `REVIEW_REQUIRED`
+- [design.md](design.md)
+- [docs/README.md](docs/README.md)
+- [docs/architecture/overview.md](docs/architecture/overview.md)
+- [docs/claim-boundary.md](docs/claim-boundary.md)
+- [docs/roadmap-and-validation.md](docs/roadmap-and-validation.md)
+- [docs/academic/evidence-register.md](docs/academic/evidence-register.md)
+- [docs/regulatory/positioning.md](docs/regulatory/positioning.md)
+- [docs/investor/README.md](docs/investor/README.md)
 
-### Physician Packet Status
+## Governance And Support
 
-- `DRAFT_REVIEW_REQUIRED`
-- `CLINICIAN_APPROVED`
-- `CHANGES_REQUESTED`
-- `REJECTED`
-- `FINALIZED`
-
-The status model is intentionally narrow and never implies medical finality.
-
-## Internal Docs
-
-1. `docs/architecture/overview.md`
-2. `docs/scope-lock.md`
-3. `docs/claim-boundary.md`
-4. `docs/status-model.md`
-5. `docs/api-scope.md`
-6. `docs/academic/evidence-register.md`
-7. `docs/regulatory/positioning.md`
-8. `docs/roadmap-and-validation.md`
-
-## Local Design Pack
-
-This standalone repository keeps its design, scope, and evidence surfaces locally.
-
-The current documentation set is a normalized April 1, 2026 snapshot prepared so the project can move independently from the parent monorepo.
+- [GOVERNANCE.md](GOVERNANCE.md) defines maintainer rules, evidence requirements, and change-control boundaries.
+- [SUPPORT.md](SUPPORT.md) explains support routing and security-reporting boundaries.
+- [PUBLISHING.md](PUBLISHING.md) is the public GitHub release checklist.
+- [CONTRIBUTING.md](CONTRIBUTING.md) covers contribution flow.
+- [SECURITY.md](SECURITY.md) covers security reporting.
+- [CITATION.cff](CITATION.cff) provides machine-readable citation metadata.
 
 ## Claim Boundary
 
-This repository is not a medical decision engine. The generated physician packet is a draft summary for clinician review. No route returns a diagnosis or treatment recommendation.
+This repository is an organizational workflow system for clinician review.
 
-## March 2026 Migration Notes
+The generated physician packet is a draft summary, not a diagnosis, treatment plan, prescription, or clinical sign-off.
 
-### Express 5.2
-
-Express 5 catches rejected promises in async route handlers automatically. The `asyncHandler` wrapper used with Express 4 has been removed. Error middleware still uses the 4-parameter `(err, req, res, next)` signature per Express 5 spec.
-
-### Helmet 8
-
-Replaces manual `X-Content-Type-Options` / `X-Frame-Options` / `Cache-Control` headers with the full Helmet suite (11 headers). `Cache-Control: no-store` is retained as a separate middleware because Helmet does not set it for non-static routes.
-
-### Node.js 24
-
-Node.js 22 "Jod" entered Maintenance LTS (EOL March 2026). The engine requirement has been bumped to `>=24` (Active LTS "Krypton", v24.14.1).
-
-### TypeScript 6.0
-
-`module` set to `"node20"` and `target` set to `"es2022"` (the former `"Node"` module resolution value is deprecated in TS 6). `strict: true` is now the compiler default.
-
-## Security Posture
-
-**HTTPS is mandatory for any deployment beyond localhost.** The application handles health-related data. Never expose this service over plaintext HTTP in any network-reachable environment. Use a reverse proxy (nginx, Caddy, cloud LB) to terminate TLS.
-
-The server applies the following hardening defaults:
-
-- Security headers via [Helmet](https://helmetjs.github.io/) (Content-Security-Policy, Strict-Transport-Security, Cross-Origin-Opener-Policy, Cross-Origin-Resource-Policy, Referrer-Policy, X-Content-Type-Options, X-Frame-Options, etc.)
-- `Cache-Control: no-store` to prevent caching of health-related data
-- `requestTimeout`: 30 s
-- `headersTimeout`: 40 s
-- Generic 500 error responses (raw messages are logged server-side, not returned to clients)
-- `x-request-id` propagation for correlation tracking
-- Request logging (`method path status duration`) on stdout
-
-## Known Limitations
-
-- **No PII encryption at transit.** HTTPS must be enforced at the reverse-proxy layer for any deployment beyond localhost.
-- **No multipart upload or OCR pipeline.** The document-ingestion seam is intentionally bounded to JSON requests that normalize `text/plain` and `text/markdown` content into source artifacts.
-- **No general-purpose FHIR server behavior.** The FHIR import seams are intentionally bounded to `POST /api/cases/:caseId/fhir-imports` for single inline resources and `POST /api/cases/:caseId/fhir-bundle-imports` for `document` or `collection` bundles. Transaction semantics, generic resource import, non-text media extraction, and ungated external dereference remain out of scope.
+Future AI or local-model experiments should remain behind explicit adapter seams, evaluation packs, and updated evidence gates before they affect public scope.

@@ -1,8 +1,8 @@
 ---
 title: "Anamnesis Standalone Design"
 status: active
-version: "1.0.0"
-last_updated: "2026-04-01"
+version: "1.1.0"
+last_updated: "2026-04-03"
 tags: [anamnesis, healthcare, standalone, explanation]
 ---
 
@@ -51,9 +51,17 @@ The broader future-phase architecture for this project is normalized into this s
 - local evidence authority: `docs/academic/evidence-register.md`;
 - local future-phase map: `docs/roadmap-and-validation.md`.
 
-These surfaces capture the April 1, 2026 authority snapshot in standalone form so the project can be reviewed, transferred, and evolved without requiring the parent monorepo.
+These surfaces capture the April 3, 2026 authority snapshot in standalone form so the project can be reviewed, transferred, and evolved without requiring the parent monorepo.
 
 That means terms such as multi-agent orchestration, evidence engine, multipart upload handling, OCR, FHIR transaction semantics, generic external attachment dereference, governance layer, or agent-native patient graph remain roadmap concepts until this standalone gains matching code and verification.
+
+## MicroPhoenix Transfer Principles
+
+- preserve one runtime chain and one composition root; the standalone already keeps this through `src/index.ts`, `src/bootstrap.ts`, and `src/application/create-app.ts`, and future subsystems should continue to extend that chain rather than create parallel entry surfaces;
+- preserve the separation between design, roadmap, evidence, and claim-boundary surfaces so research cannot silently widen product scope;
+- add new interoperability or AI subsystems behind explicit adapter seams and task-local evaluation packs before they affect the public narrative;
+- retain auditability, request correlation, and operator-visible observability whenever the workflow surface grows;
+- import only the minimum useful subset of the parent architecture. The standalone should not inherit the parent platform's full DI, MCP, MAS, or plugin estate until subsystem count and failure modes justify that overhead.
 
 ## Current Safety Posture
 
@@ -63,23 +71,24 @@ That means terms such as multi-agent orchestration, evidence engine, multipart u
 - the status model is operational only, not clinical;
 - the docs separate implemented behavior from evidence and roadmap material.
 
-## Technology Stack (March 2026)
+## Technology Stack (April 2026)
 
 | Dependency | Version | Notes |
 |---|---|---|
-| TypeScript | 6.0 | `module: "node20"`, `target: "es2022"` |
-| Express | 5.2 | Native async handler support, no wrapper needed |
-| Zod | 4.3 | Runtime schema validation |
-| Helmet | 8.x | Security headers middleware |
-| Node.js | >=24 | Active LTS runtime |
+| Node.js | `>=24` | Active LTS runtime contract |
+| TypeScript | `^6.0.2` | `module: "node20"`, `target: "es2022"` |
+| Express | `^5.2.1` | Native async handler support |
+| Zod | `^4.3.6` | Runtime schema validation |
+| Helmet | `^8.1.0` | Security headers middleware |
+| better-sqlite3 | `^12.8.0` | Durable encrypted case and audit persistence |
 | node:test | built-in | No external test framework |
 
 ## Claim Classes
 
-- **implemented target**: current routes and in-memory workflow state;
+- **implemented target**: current routes, persistence, and workflow state;
 - **research-informed**: why the project stays clinician-in-the-loop and evidence-first;
 - **regulatory positioning**: why narrow public claims matter;
-- **scenario horizon**: future multimodal or decision-support phases.
+- **scenario horizon**: future multimodal, retrieval, or decision-support phases.
 
 ## Architectural Direction
 
@@ -92,3 +101,5 @@ The standalone keeps a reduced kernel derived from the parent project:
 - verification-first docs and tests.
 
 It intentionally drops the parent platform's broad DI, MAS, plugin, and MCP estate from the first slice.
+
+If future local inference arrives, the default path should be an adapterized sidecar or local serving rail such as Ollama or vLLM plus offline evaluation, not direct embedding of a medical model into the write path. MedGemma-class models are candidate starting points only after adaptation, task-local validation, and clinician-visible safeguards.
