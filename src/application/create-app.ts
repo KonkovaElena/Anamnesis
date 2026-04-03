@@ -5,6 +5,7 @@ import { ZodError, z } from "zod";
 import { createRateLimiter } from "./rate-limiter";
 import {
   type AuditTrailStore,
+  type CreateAuditEventInput,
   type ExternalAttachmentFetcher,
   type OperationsSummary,
   AnamnesisDomainError,
@@ -162,6 +163,27 @@ function renderMetrics(summary: OperationsSummary): string {
   return `${lines.join("\n")}\n`;
 }
 
+function readResponseRequestId(response: Response): string | undefined {
+  const value = response.getHeader("x-request-id");
+  if (typeof value === "string") {
+    return value;
+  }
+  return Array.isArray(value) ? value[0] : undefined;
+}
+
+async function appendAuditEvent(
+  auditStore: AuditTrailStore,
+  response: Response,
+  input: CreateAuditEventInput,
+): Promise<void> {
+  await auditStore.append(
+    createAuditEvent({
+      ...input,
+      correlationId: readResponseRequestId(response),
+    }),
+  );
+}
+
 export function createApp({ store, auditStore, isShuttingDown, authMiddleware, rateLimitRpm, externalAttachmentFetcher }: CreateAppDependencies) {
   const app = express();
   const parseJson = express.json({ limit: "256kb" });
@@ -204,8 +226,10 @@ export function createApp({ store, auditStore, isShuttingDown, authMiddleware, r
     const input = createCaseSchema.parse(request.body ?? {});
     const record = createCase(input);
     await store.saveCase(record);
-    await auditStore.append(
-      createAuditEvent({
+    await appendAuditEvent(
+      auditStore,
+      response,
+      {
         caseId: record.caseId,
         eventType: "case.created",
         action: "create_case",
@@ -213,7 +237,7 @@ export function createApp({ store, auditStore, isShuttingDown, authMiddleware, r
         details: {
           hasPatientLabel: Boolean(record.patientLabel),
         },
-      }),
+      },
     );
     response.status(201).json({ case: record });
   });
@@ -255,8 +279,10 @@ export function createApp({ store, auditStore, isShuttingDown, authMiddleware, r
     const nextCase = addArtifact(record, input);
     await store.saveCase(nextCase);
     const artifact = nextCase.artifacts.at(-1);
-    await auditStore.append(
-      createAuditEvent({
+    await appendAuditEvent(
+      auditStore,
+      response,
+      {
         caseId: nextCase.caseId,
         eventType: "artifact.added",
         action: "add_artifact",
@@ -265,7 +291,7 @@ export function createApp({ store, auditStore, isShuttingDown, authMiddleware, r
           artifactType: artifact?.artifactType ?? input.artifactType,
           hasSourceDate: Boolean(artifact?.sourceDate ?? input.sourceDate),
         },
-      }),
+      },
     );
     response.status(201).json({ case: nextCase });
   });
@@ -283,8 +309,10 @@ export function createApp({ store, auditStore, isShuttingDown, authMiddleware, r
     const input = documentIngestionSchema.parse(request.body ?? {});
     const result = ingestDocument(record, input);
     await store.saveCase(result.nextCase);
-    await auditStore.append(
-      createAuditEvent({
+    await appendAuditEvent(
+      auditStore,
+      response,
+      {
         caseId: result.nextCase.caseId,
         eventType: "document.ingested",
         action: "ingest_document",
@@ -292,11 +320,12 @@ export function createApp({ store, auditStore, isShuttingDown, authMiddleware, r
         details: {
           artifactType: input.artifactType,
           contentType: result.ingestion.contentType,
+          normalizationProfile: result.ingestion.normalizationProfile,
           hasFilename: Boolean(result.ingestion.filename),
           truncated: result.ingestion.truncated,
           normalizedCharacters: result.ingestion.normalizedCharacterCount,
         },
-      }),
+      },
     );
     response.status(201).json({
       case: result.nextCase,
@@ -318,8 +347,10 @@ export function createApp({ store, auditStore, isShuttingDown, authMiddleware, r
     const input = fhirImportSchema.parse(request.body ?? {});
     const result = ingestFhirResource(record, input);
     await store.saveCase(result.nextCase);
-    await auditStore.append(
-      createAuditEvent({
+    await appendAuditEvent(
+      auditStore,
+      response,
+      {
         caseId: result.nextCase.caseId,
         eventType: "fhir.imported",
         action: "import_fhir",
@@ -328,10 +359,12 @@ export function createApp({ store, auditStore, isShuttingDown, authMiddleware, r
           artifactType: result.artifact.artifactType,
           resourceType: result.fhirImport.resourceType,
           sourceContentType: result.fhirImport.sourceContentType,
+          importProfile: result.fhirImport.importProfile,
+          normalizationProfile: result.ingestion.normalizationProfile,
           truncated: result.ingestion.truncated,
           normalizedCharacters: result.ingestion.normalizedCharacterCount,
         },
-      }),
+      },
     );
     response.status(201).json({
       case: result.nextCase,
@@ -356,8 +389,10 @@ export function createApp({ store, auditStore, isShuttingDown, authMiddleware, r
       externalAttachmentFetcher,
     });
     await store.saveCase(result.nextCase);
-    await auditStore.append(
-      createAuditEvent({
+    await appendAuditEvent(
+      auditStore,
+      response,
+      {
         caseId: result.nextCase.caseId,
         eventType: "fhir.bundle.imported",
         action: "import_fhir_bundle",
@@ -365,10 +400,12 @@ export function createApp({ store, auditStore, isShuttingDown, authMiddleware, r
         details: {
           artifactCount: result.artifacts.length,
           bundleType: result.bundleImport.bundleType,
+          bundleProfile: result.bundleImport.bundleProfile,
+          entryProfiles: result.bundleImport.entryProfiles.join(","),
           usedExternalAttachmentFetch: result.bundleImport.usedExternalAttachmentFetch,
           truncatedCount: result.ingestions.filter((ingestion) => ingestion.truncated).length,
         },
-      }),
+      },
     );
     response.status(201).json({
       case: result.nextCase,
@@ -391,8 +428,10 @@ export function createApp({ store, auditStore, isShuttingDown, authMiddleware, r
     const input = createPacketSchema.parse(request.body ?? {});
     const result = draftPhysicianPacket(record, input);
     await store.saveCase(result.nextCase);
-    await auditStore.append(
-      createAuditEvent({
+    await appendAuditEvent(
+      auditStore,
+      response,
+      {
         caseId: result.nextCase.caseId,
         packetId: result.packet.packetId,
         eventType: "packet.drafted",
@@ -403,7 +442,7 @@ export function createApp({ store, auditStore, isShuttingDown, authMiddleware, r
           artifactCount: result.packet.artifactIds.length,
           hasFocus: Boolean(result.packet.focus),
         },
-      }),
+      },
     );
     response.status(201).json({
       case: result.nextCase,
@@ -443,8 +482,10 @@ export function createApp({ store, auditStore, isShuttingDown, authMiddleware, r
     const input = submitReviewSchema.parse(request.body ?? {});
     const result = submitReview(record, packetId, input);
     await store.saveCase(result.nextCase);
-    await auditStore.append(
-      createAuditEvent({
+    await appendAuditEvent(
+      auditStore,
+      response,
+      {
         caseId: result.nextCase.caseId,
         packetId,
         eventType: "review.submitted",
@@ -455,7 +496,7 @@ export function createApp({ store, auditStore, isShuttingDown, authMiddleware, r
           reviewAction: result.review.action,
           hasComments: Boolean(result.review.comments),
         },
-      }),
+      },
     );
     response.status(201).json({
       review: result.review,
@@ -476,8 +517,10 @@ export function createApp({ store, auditStore, isShuttingDown, authMiddleware, r
     const input = finalizePacketSchema.parse(request.body ?? {});
     const result = finalizePhysicianPacket(record, packetId, input);
     await store.saveCase(result.nextCase);
-    await auditStore.append(
-      createAuditEvent({
+    await appendAuditEvent(
+      auditStore,
+      response,
+      {
         caseId: result.nextCase.caseId,
         packetId,
         eventType: "packet.finalized",
@@ -488,7 +531,7 @@ export function createApp({ store, auditStore, isShuttingDown, authMiddleware, r
           hasReason: Boolean(result.packet.finalizationReason),
           fingerprint: result.packet.finalizedFingerprint ?? null,
         },
-      }),
+      },
     );
     response.json({
       case: result.nextCase,
@@ -568,8 +611,10 @@ export function createApp({ store, auditStore, isShuttingDown, authMiddleware, r
     const removedArtifact = record.artifacts.find((artifact) => artifact.artifactId === artifactId);
     const nextCase = removeArtifact(record, artifactId);
     await store.saveCase(nextCase);
-    await auditStore.append(
-      createAuditEvent({
+    await appendAuditEvent(
+      auditStore,
+      response,
+      {
         caseId: nextCase.caseId,
         eventType: "artifact.removed",
         action: "remove_artifact",
@@ -578,7 +623,7 @@ export function createApp({ store, auditStore, isShuttingDown, authMiddleware, r
           artifactId,
           artifactType: removedArtifact?.artifactType ?? "unknown",
         },
-      }),
+      },
     );
     response.json({ case: nextCase });
   });
@@ -595,8 +640,10 @@ export function createApp({ store, auditStore, isShuttingDown, authMiddleware, r
     }
 
     await store.deleteCase(caseId);
-    await auditStore.append(
-      createAuditEvent({
+    await appendAuditEvent(
+      auditStore,
+      response,
+      {
         caseId,
         eventType: "case.deleted",
         action: "delete_case",
@@ -605,7 +652,7 @@ export function createApp({ store, auditStore, isShuttingDown, authMiddleware, r
           artifactCount: record.artifacts.length,
           packetCount: record.physicianPackets.length,
         },
-      }),
+      },
     );
 
     response.status(204).end();

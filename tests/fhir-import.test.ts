@@ -22,6 +22,7 @@ interface FhirImportView {
   sourceContentType: string;
   title: string;
   sourceDate?: string;
+  importProfile: string;
 }
 
 interface IngestionView {
@@ -30,6 +31,7 @@ interface IngestionView {
   normalizedCharacterCount: number;
   excerptCharacterCount: number;
   truncated: boolean;
+  normalizationProfile: string;
 }
 
 type FhirImportResultView = {
@@ -104,7 +106,9 @@ test("ingestFhirResource imports an inline DocumentReference into a bounded arti
   assert.equal(result.artifact.sourceDate, "2026-03-30");
   assert.equal(result.ingestion.contentType, "text/plain");
   assert.equal(result.ingestion.truncated, false);
+  assert.equal(result.ingestion.normalizationProfile, "document.text.plain.v1");
   assert.equal(result.fhirImport.resourceType, "DocumentReference");
+  assert.equal(result.fhirImport.importProfile, "fhir.document-reference.inline.text.v1");
   assert.equal(result.fhirImport.transportContentType, "application/fhir+json");
   assert.equal(result.fhirImport.sourceContentType, "text/plain");
   assert.equal(result.fhirImport.sourceDate, "2026-03-30");
@@ -137,7 +141,9 @@ test("ingestFhirResource imports an inline Binary resource with text markdown co
   assert.equal(result.artifact.title, "Imported markdown note");
   assert.equal(result.artifact.summary, "# Visit Note\n\nSymptoms remain stable.");
   assert.equal(result.ingestion.contentType, "text/markdown");
+  assert.equal(result.ingestion.normalizationProfile, "document.text.markdown.v1");
   assert.equal(result.fhirImport.resourceType, "Binary");
+  assert.equal(result.fhirImport.importProfile, "fhir.binary.inline.text.v1");
   assert.equal(result.fhirImport.sourceContentType, "text/markdown");
   assert.match(result.artifact.provenance ?? "", /fhir-import:Binary/);
 });

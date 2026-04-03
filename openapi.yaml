@@ -566,6 +566,9 @@ components:
     DocumentContentType:
       type: string
       enum: [text/plain, text/markdown]
+    DocumentNormalizationProfile:
+      type: string
+      enum: [document.text.plain.v1, document.text.markdown.v1]
     ReviewAction:
       type: string
       enum: [approved, changes_requested, rejected]
@@ -578,6 +581,13 @@ components:
     FhirImportResourceType:
       type: string
       enum: [Binary, DocumentReference]
+    FhirImportProfile:
+      type: string
+      enum:
+        [fhir.binary.inline.text.v1, fhir.document-reference.inline.text.v1, fhir.document-reference.external.text.v1]
+    FhirBundleProfile:
+      type: string
+      enum: [fhir.bundle.document.v1, fhir.bundle.collection.v1]
     CaseIntake:
       type: object
       additionalProperties: false
@@ -744,10 +754,12 @@ components:
     DocumentIngestionResult:
       type: object
       additionalProperties: false
-      required: [contentType, normalizedCharacterCount, excerptCharacterCount, truncated]
+      required: [contentType, normalizationProfile, normalizedCharacterCount, excerptCharacterCount, truncated]
       properties:
         contentType:
           $ref: '#/components/schemas/DocumentContentType'
+        normalizationProfile:
+          $ref: '#/components/schemas/DocumentNormalizationProfile'
         filename:
           type: string
         normalizedCharacterCount:
@@ -761,7 +773,7 @@ components:
     FhirImportResult:
       type: object
       additionalProperties: false
-      required: [resourceType, transportContentType, sourceContentType, title]
+      required: [resourceType, transportContentType, sourceContentType, importProfile, title]
       properties:
         resourceType:
           $ref: '#/components/schemas/FhirImportResourceType'
@@ -770,6 +782,8 @@ components:
           const: application/fhir+json
         sourceContentType:
           $ref: '#/components/schemas/DocumentContentType'
+        importProfile:
+          $ref: '#/components/schemas/FhirImportProfile'
         title:
           type: string
         sourceDate:
@@ -777,13 +791,19 @@ components:
     FhirBundleImportResult:
       type: object
       additionalProperties: false
-      required: [resourceType, bundleType, artifactCount, transportContentType, usedExternalAttachmentFetch]
+      required: [resourceType, bundleType, bundleProfile, entryProfiles, artifactCount, transportContentType, usedExternalAttachmentFetch]
       properties:
         resourceType:
           type: string
           const: Bundle
         bundleType:
           $ref: '#/components/schemas/FhirBundleType'
+        bundleProfile:
+          $ref: '#/components/schemas/FhirBundleProfile'
+        entryProfiles:
+          type: array
+          items:
+            $ref: '#/components/schemas/FhirImportProfile'
         artifactCount:
           type: integer
           minimum: 1
@@ -795,11 +815,16 @@ components:
     AuditEventRecord:
       type: object
       additionalProperties: false
-      required: [auditId, caseId, eventType, action, occurredAt, recordedAt, outcome]
+      required: [auditId, eventId, caseId, eventType, action, occurredAt, recordedAt, outcome, correlationId, schemaVersion]
       properties:
         auditId:
           type: string
           format: uuid
+          description: Legacy public audit identifier. Mirrors `eventId`.
+        eventId:
+          type: string
+          format: uuid
+          description: Typed event-kernel identifier. Currently equal to `auditId`.
         caseId:
           type: string
           format: uuid
@@ -832,6 +857,15 @@ components:
         outcome:
           type: string
           const: success
+        correlationId:
+          type: string
+          description: Correlation identifier of the originating request or event chain.
+        causationId:
+          type: string
+          description: Optional upstream event identifier for chained causality.
+        schemaVersion:
+          type: integer
+          const: 1
         details:
           type: object
           additionalProperties: true

@@ -49,10 +49,13 @@ The project should earn any future medical positioning through explicit workflow
 The broader future-phase architecture for this project is normalized into this standalone repository rather than kept as an external dependency.
 
 - local scope and phase boundary: `design.md`;
+- April 3 refresh delta and publication-baseline clarification: `docs/design-refresh-2026-04-03.md`;
 - local evidence authority: `docs/academic/evidence-register.md`;
 - local future-phase map: `docs/roadmap-and-validation.md`.
 
 These surfaces capture the April 3, 2026 authority snapshot in standalone form so the project can be reviewed, transferred, and evolved without requiring the parent monorepo.
+
+For live GitHub repository-operations state after publication, use `docs/investor/GITHUB_POST_PUSH_CHECK_2026_04_03.md` instead of inferring state from committed workflow files alone.
 
 That means terms such as multi-agent orchestration, evidence engine, multipart upload handling, OCR, FHIR transaction semantics, generic external attachment dereference, governance layer, or agent-native patient graph remain roadmap concepts until this standalone gains matching code and verification.
 
@@ -70,7 +73,8 @@ That means terms such as multi-agent orchestration, evidence engine, multipart u
 - packet finalization is workflow finality only, not medical finality;
 - no route returns a diagnosis or treatment recommendation;
 - the status model is operational only, not clinical;
-- the docs separate implemented behavior from evidence and roadmap material.
+- the docs separate implemented behavior from evidence and roadmap material;
+- public repository protection state is documented separately from application behavior so GitHub settings do not silently masquerade as shipped product capability.
 
 ## Technology Stack (April 2026)
 

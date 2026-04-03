@@ -1,7 +1,7 @@
 ---
 title: "Anamnesis API Scope"
 status: active
-version: "1.0.0"
+version: "1.2.0"
 last_updated: "2026-04-03"
 tags: [anamnesis, api, reference]
 ---
@@ -55,6 +55,26 @@ This is an organizational workflow API, not a diagnostic or treatment API.
 | `/readyz` | `GET` | Readiness probe; returns `503` during shutdown drain. |
 | `/metrics` | `GET` | Prometheus-style plain-text counters. |
 
+## Normalization Profiles
+
+Document and FHIR import responses now expose explicit profile metadata so clients can tell which bounded parser path produced the stored artifact.
+
+- `DocumentIngestionResult.normalizationProfile` is `document.text.plain.v1` or `document.text.markdown.v1`.
+- `FhirImportResult.importProfile` distinguishes `Binary`, inline `DocumentReference`, and externally dereferenced `DocumentReference` imports.
+- `FhirBundleImportResult.bundleProfile` records whether the accepted bundle gate was `document` or `collection`.
+- `FhirBundleImportResult.entryProfiles` lists the per-entry parser profiles that actually emitted artifacts.
+
+## Audit Event Envelope
+
+`GET /api/cases/{caseId}/audit-events` now returns a typed audit-event envelope rather than only a minimal log row.
+
+- `auditId` remains the legacy public identifier for compatibility.
+- `eventId` is the extracted event-kernel identifier and currently mirrors `auditId` exactly.
+- `schemaVersion` is currently fixed at `1`.
+- `correlationId` records the originating HTTP request correlation and mirrors the `x-request-id` header assigned when the event was created through the API.
+- `causationId` is optional and reserved for future chained event flows.
+- ingestion-related audit events include normalization and import profile metadata inside `details`.
+
 ## Workflow Semantics
 
 - New cases start in `INTAKING`.
@@ -104,82 +124,10 @@ Bundle attachment dereference is allowed only when all of the following are true
 ## Important Asymmetries
 
 - `GET /api/cases/{caseId}/audit-events` is keyed to the append-only audit store, not to current case existence. Deleted cases can still return audit history.
+- `GET /api/cases/{caseId}/audit-events` now exposes correlation-aware event metadata suitable for tracing one request across case, artifact, review, and finalization transitions.
 - `GET /metrics` is unauthenticated, but unlike `/healthz` and `/readyz` it is still subject to rate limiting when `RATE_LIMIT_RPM` is enabled.
 - `POST /api/cases/{caseId}/physician-packets` requires at least one registered artifact and returns a `409` domain error otherwise.
 
 ## Machine-Readable Contract
 
-The machine-readable authority surface for this route set is [../openapi.yaml](../openapi.yaml).---
-title: "Anamnesis API Scope"
-status: active
-version: "1.0.0"
-last_updated: "2026-04-01"
-tags: [anamnesis, healthcare, api-scope, reference]
----
-
-# API Scope
-
-## Routes
-
-- `POST /api/cases`
-- `GET /api/cases`
-- `GET /api/cases/:caseId`
-- `POST /api/cases/:caseId/artifacts`
-- `POST /api/cases/:caseId/document-ingestions`
-- `POST /api/cases/:caseId/fhir-imports`
-- `POST /api/cases/:caseId/fhir-bundle-imports`
-- `DELETE /api/cases/:caseId/artifacts/:artifactId`
-- `POST /api/cases/:caseId/physician-packets`
-- `GET /api/cases/:caseId/physician-packets`
-- `POST /api/cases/:caseId/physician-packets/:packetId/reviews`
-- `GET /api/cases/:caseId/physician-packets/:packetId/reviews`
-- `POST /api/cases/:caseId/physician-packets/:packetId/finalize`
-- `GET /api/cases/:caseId/audit-events`
-- `DELETE /api/cases/:caseId`
-- `GET /api/operations/summary`
-- `GET /healthz`
-- `GET /readyz`
-- `GET /metrics`
-
-## Authentication
-
-When `API_KEY` is set, all `/api/*` routes require `Authorization: Bearer <key>`. Health, readiness, and metrics probes are exempt.
-
-## Rate Limiting
-
-When `RATE_LIMIT_RPM` is set to a positive integer, per-IP sliding-window rate limiting is applied. Health and readiness probes are exempt.
-
-## Boundary Rule
-
-The API is a workflow and packeting surface. It is not a diagnostic API.
-
-## Document Ingestion Boundary
-
-`POST /api/cases/:caseId/document-ingestions` is intentionally bounded.
-
-- accepted content types: `text/plain`, `text/markdown`;
-- request body stays JSON-based;
-- normalized text is converted into a bounded source-artifact summary;
-- multipart uploads, OCR, and full FHIR resource parsing are out of scope.
-
-## FHIR Import Boundary
-
-`POST /api/cases/:caseId/fhir-imports` is intentionally bounded.
-
-- request body stays JSON-based and wraps a FHIR JSON resource object;
-- supported resource types: `Binary`, `DocumentReference`;
-- supported inline document media types: `text/plain`, `text/markdown`;
-- imports reuse the bounded source-artifact summary pipeline and do not create a FHIR repository;
-- Bundle handling is delegated to the separate bundle route, and generic FHIR transactions remain out of scope.
-
-## FHIR Bundle Import Boundary
-
-`POST /api/cases/:caseId/fhir-bundle-imports` is intentionally bounded.
-
-- request body stays JSON-based and wraps a FHIR `Bundle` resource object;
-- supported bundle types: `document`, `collection`;
-- supported entry resource types: `Binary`, `DocumentReference`;
-- supported document media types: `text/plain`, `text/markdown`;
-- inline attachment data is preferred; `attachment.url` is only dereferenced when `allowExternalAttachmentFetch` is explicitly `true`;
-- external fetch is bounded to `https`, text responses, timeout enforcement, and byte limits;
-- transaction semantics, history bundles, search bundles, and generic FHIR repository behavior remain out of scope.
+The machine-readable authority surface for this route set is [../openapi.yaml](../openapi.yaml).

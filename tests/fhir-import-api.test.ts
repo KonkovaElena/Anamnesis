@@ -77,8 +77,8 @@ test("POST /fhir-imports creates a bounded artifact, stales packets, and records
     const importResponse = await jsonRequest<{
       case: { physicianPackets: Array<{ isStale: boolean }> };
       artifact: { title: string; summary: string };
-      ingestion: { contentType: string; truncated: boolean };
-      fhirImport: { resourceType: string; sourceContentType: string; title: string };
+      ingestion: { contentType: string; truncated: boolean; normalizationProfile: string };
+      fhirImport: { resourceType: string; sourceContentType: string; title: string; importProfile: string };
     }>(baseUrl, `/api/cases/${caseId}/fhir-imports`, {
       method: "POST",
       body: {
@@ -106,9 +106,11 @@ test("POST /fhir-imports creates a bounded artifact, stales packets, and records
     assert.equal(importResponse.status, 201);
     assert.equal(importResponse.body.artifact.title, "Discharge note");
     assert.equal(importResponse.body.fhirImport.resourceType, "DocumentReference");
+    assert.equal(importResponse.body.fhirImport.importProfile, "fhir.document-reference.inline.text.v1");
     assert.equal(importResponse.body.fhirImport.sourceContentType, "text/plain");
     assert.equal(importResponse.body.fhirImport.title, "Discharge note");
     assert.equal(importResponse.body.ingestion.contentType, "text/plain");
+    assert.equal(importResponse.body.ingestion.normalizationProfile, "document.text.plain.v1");
     assert.equal(importResponse.body.ingestion.truncated, false);
     assert.equal(
       importResponse.body.artifact.summary,

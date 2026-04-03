@@ -77,7 +77,7 @@ test("POST /document-ingestions creates a bounded artifact, stales packets, and 
     const ingestionResponse = await jsonRequest<{
       case: { physicianPackets: Array<{ isStale: boolean }> };
       artifact: { summary: string };
-      ingestion: { contentType: string; truncated: boolean };
+      ingestion: { contentType: string; truncated: boolean; normalizationProfile: string };
     }>(baseUrl, `/api/cases/${caseId}/document-ingestions`, {
       method: "POST",
       body: {
@@ -92,6 +92,7 @@ test("POST /document-ingestions creates a bounded artifact, stales packets, and 
 
     assert.equal(ingestionResponse.status, 201);
     assert.equal(ingestionResponse.body.ingestion.contentType, "text/plain");
+    assert.equal(ingestionResponse.body.ingestion.normalizationProfile, "document.text.plain.v1");
     assert.equal(ingestionResponse.body.ingestion.truncated, false);
     assert.equal(
       ingestionResponse.body.artifact.summary,

@@ -22,6 +22,8 @@ interface BundleImportView {
   artifactCount: number;
   transportContentType: string;
   usedExternalAttachmentFetch: boolean;
+  bundleProfile: string;
+  entryProfiles: string[];
 }
 
 interface IngestionView {
@@ -29,6 +31,7 @@ interface IngestionView {
   normalizedCharacterCount: number;
   excerptCharacterCount: number;
   truncated: boolean;
+  normalizationProfile: string;
 }
 
 interface ExternalAttachmentView {
@@ -135,9 +138,18 @@ test("ingestFhirBundle imports supported document bundle entries into bounded ar
   assert.equal(result.artifacts[0]?.summary, "First line.\n\nSecond line here.");
   assert.equal(result.artifacts[1]?.summary, "# Visit Note\n\nSymptoms remain stable.");
   assert.equal(result.ingestions.length, 2);
+  assert.deepStrictEqual(result.ingestions.map((ingestion) => ingestion.normalizationProfile), [
+    "document.text.plain.v1",
+    "document.text.markdown.v1",
+  ]);
   assert.equal(result.bundleImport.resourceType, "Bundle");
   assert.equal(result.bundleImport.bundleType, "document");
+  assert.equal(result.bundleImport.bundleProfile, "fhir.bundle.document.v1");
   assert.equal(result.bundleImport.artifactCount, 2);
+  assert.deepStrictEqual(result.bundleImport.entryProfiles, [
+    "fhir.document-reference.inline.text.v1",
+    "fhir.binary.inline.text.v1",
+  ]);
   assert.equal(result.bundleImport.transportContentType, "application/fhir+json");
   assert.equal(result.bundleImport.usedExternalAttachmentFetch, false);
   assert.equal(result.nextCase.physicianPackets[0]?.isStale, true);
@@ -269,4 +281,8 @@ test("ingestFhirBundle dereferences url-only attachments when external fetch is 
   assert.equal(result.artifacts[0]?.title, "Remote discharge note");
   assert.equal(result.artifacts[0]?.summary, "Fetched document text from remote source.");
   assert.equal(result.bundleImport.usedExternalAttachmentFetch, true);
+  assert.equal(result.bundleImport.bundleProfile, "fhir.bundle.collection.v1");
+  assert.deepStrictEqual(result.bundleImport.entryProfiles, [
+    "fhir.document-reference.external.text.v1",
+  ]);
 });

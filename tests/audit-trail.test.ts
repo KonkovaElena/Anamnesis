@@ -26,7 +26,7 @@ async function jsonRequest<T>(
   baseUrl: string,
   path: string,
   options?: { method?: string; body?: unknown },
-): Promise<{ status: number; body: T }> {
+): Promise<{ status: number; body: T; headers: Headers }> {
   const response = await fetch(`${baseUrl}${path}`, {
     method: options?.method ?? "GET",
     headers: { "content-type": "application/json" },
@@ -36,6 +36,7 @@ async function jsonRequest<T>(
   return {
     status: response.status,
     body: (await response.json()) as T,
+    headers: response.headers,
   };
 }
 
@@ -124,6 +125,35 @@ test("POST finalize transitions an approved packet and GET audit-events returns 
       "packet.finalized",
     ]);
     assert.equal(auditResponse.body.meta.totalEvents, 5);
+  });
+});
+
+test("audit events keep the originating request correlation id", async () => {
+  await withServer(async (baseUrl) => {
+    const caseResponse = await jsonRequest<{ case: { caseId: string } }>(baseUrl, "/api/cases", {
+      method: "POST",
+      body: {
+        patientLabel: "correlation-check",
+        intake: {
+          chiefConcern: "Fatigue",
+          symptomSummary: "Persistent fatigue after ordinary activity.",
+          historySummary: "No prior cardiology workup in the record.",
+          questionsForClinician: ["What follow-up tests are appropriate?"],
+        },
+      },
+    });
+
+    const caseId = caseResponse.body.case.caseId;
+    const requestCorrelationId = caseResponse.headers.get("x-request-id");
+    assert.ok(requestCorrelationId);
+
+    const auditResponse = await jsonRequest<{
+      events: Array<{ auditId: string; eventId: string; correlationId: string; schemaVersion: number }>;
+    }>(baseUrl, `/api/cases/${caseId}/audit-events`);
+
+    assert.equal(auditResponse.body.events[0]?.correlationId, requestCorrelationId);
+    assert.equal(auditResponse.body.events[0]?.schemaVersion, 1);
+    assert.equal(auditResponse.body.events[0]?.auditId, auditResponse.body.events[0]?.eventId);
   });
 });
 

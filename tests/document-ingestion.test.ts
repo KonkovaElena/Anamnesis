@@ -23,6 +23,7 @@ interface IngestionView {
   normalizedCharacterCount: number;
   excerptCharacterCount: number;
   truncated: boolean;
+  normalizationProfile: string;
 }
 
 type IngestResultView = {
@@ -84,6 +85,7 @@ test("ingestDocument normalizes bounded text into an artifact and marks packets 
 
   assert.equal(result.artifact.summary, "First line.\n\nSecond line with gaps.\nThird line.");
   assert.equal(result.ingestion.contentType, "text/plain");
+  assert.equal(result.ingestion.normalizationProfile, "document.text.plain.v1");
   assert.equal(result.ingestion.truncated, false);
   assert.equal(result.nextCase.artifacts.length, 2);
   assert.equal(result.nextCase.physicianPackets[0]?.isStale, true);
@@ -111,6 +113,7 @@ test("ingestDocument truncates oversized normalized content into a bounded excer
   });
 
   assert.equal(result.ingestion.truncated, true);
+  assert.equal(result.ingestion.normalizationProfile, "document.text.markdown.v1");
   assert.ok(result.ingestion.normalizedCharacterCount > result.ingestion.excerptCharacterCount);
   assert.ok(result.artifact.summary.length <= 4000);
   assert.equal(result.artifact.summary.endsWith("…"), true);

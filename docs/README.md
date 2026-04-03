@@ -5,6 +5,7 @@ This page routes the active documentation surfaces for Anamnesis.
 ## Product And Architecture
 
 - [../design.md](../design.md)
+- [design-refresh-2026-04-03.md](design-refresh-2026-04-03.md)
 - [../openapi.yaml](../openapi.yaml)
 - [architecture/overview.md](architecture/overview.md)
 - [api-scope.md](api-scope.md)

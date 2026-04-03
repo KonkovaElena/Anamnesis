@@ -131,6 +131,7 @@ OpenAPI description: [openapi.yaml](openapi.yaml)
 
 - [design.md](design.md)
 - [docs/README.md](docs/README.md)
+- [docs/design-refresh-2026-04-03.md](docs/design-refresh-2026-04-03.md)
 - [docs/api-scope.md](docs/api-scope.md)
 - [docs/architecture/overview.md](docs/architecture/overview.md)
 - [docs/claim-boundary.md](docs/claim-boundary.md)

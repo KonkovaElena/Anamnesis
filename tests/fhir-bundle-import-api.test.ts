@@ -78,8 +78,8 @@ test("POST /fhir-bundle-imports creates multiple artifacts, stales packets, and 
     const importResponse = await jsonRequest<{
       case: { physicianPackets: Array<{ isStale: boolean }> };
       artifacts: Array<{ title: string; summary: string }>;
-      ingestions: Array<{ contentType: string; truncated: boolean }>;
-      bundleImport: { resourceType: string; bundleType: string; artifactCount: number };
+      ingestions: Array<{ contentType: string; truncated: boolean; normalizationProfile: string }>;
+      bundleImport: { resourceType: string; bundleType: string; artifactCount: number; bundleProfile: string; entryProfiles: string[] };
     }>(baseUrl, `/api/cases/${caseId}/fhir-bundle-imports`, {
       method: "POST",
       body: {
@@ -131,9 +131,18 @@ test("POST /fhir-bundle-imports creates multiple artifacts, stales packets, and 
       ["Discharge note", "FHIR Binary import"],
     );
     assert.equal(importResponse.body.ingestions.length, 2);
+    assert.deepStrictEqual(importResponse.body.ingestions.map((item) => item.normalizationProfile), [
+      "document.text.plain.v1",
+      "document.text.markdown.v1",
+    ]);
     assert.equal(importResponse.body.bundleImport.resourceType, "Bundle");
     assert.equal(importResponse.body.bundleImport.bundleType, "document");
+    assert.equal(importResponse.body.bundleImport.bundleProfile, "fhir.bundle.document.v1");
     assert.equal(importResponse.body.bundleImport.artifactCount, 2);
+    assert.deepStrictEqual(importResponse.body.bundleImport.entryProfiles, [
+      "fhir.document-reference.inline.text.v1",
+      "fhir.binary.inline.text.v1",
+    ]);
     assert.equal(importResponse.body.case.physicianPackets[0]?.isStale, true);
 
     const auditResponse = await jsonRequest<{
@@ -214,7 +223,7 @@ test("POST /fhir-bundle-imports imports url-only attachments when external fetch
 
       const response = await jsonRequest<{
         artifacts: Array<{ title: string; summary: string }>;
-        bundleImport: { usedExternalAttachmentFetch: boolean };
+        bundleImport: { usedExternalAttachmentFetch: boolean; bundleProfile: string; entryProfiles: string[] };
       }>(baseUrl, `/api/cases/${caseId}/fhir-bundle-imports`, {
         method: "POST",
         body: {
@@ -248,6 +257,10 @@ test("POST /fhir-bundle-imports imports url-only attachments when external fetch
       assert.equal(response.body.artifacts.length, 1);
       assert.equal(response.body.artifacts[0]?.summary, "Fetched document text from remote source.");
       assert.equal(response.body.bundleImport.usedExternalAttachmentFetch, true);
+      assert.equal(response.body.bundleImport.bundleProfile, "fhir.bundle.collection.v1");
+      assert.deepStrictEqual(response.body.bundleImport.entryProfiles, [
+        "fhir.document-reference.external.text.v1",
+      ]);
     },
     {
       externalAttachmentFetcher: async (url: string) => {

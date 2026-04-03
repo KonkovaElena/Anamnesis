@@ -1,4 +1,17 @@
 import { createHash, randomUUID } from "node:crypto";
+import {
+  createTypedAuditEvent,
+  type AuditEventRecord,
+  type CreateAuditEventInput,
+} from "../core/audit-events";
+import {
+  classifyDocumentNormalizationProfile,
+  classifyFhirBundleProfile,
+  classifyFhirImportProfile,
+  type DocumentNormalizationProfile,
+  type FhirBundleProfile,
+  type FhirImportProfile,
+} from "../core/normalization-profiles";
 
 export type CaseStatus = "INTAKING" | "READY_FOR_PACKET" | "REVIEW_REQUIRED";
 export type ArtifactType = "note" | "lab" | "summary" | "report" | "imaging-summary";
@@ -8,18 +21,7 @@ export type FhirImportResourceType = "Binary" | "DocumentReference";
 export type FhirBundleType = "document" | "collection";
 export type PhysicianPacketStatus = "DRAFT_REVIEW_REQUIRED" | "CLINICIAN_APPROVED" | "CHANGES_REQUESTED" | "REJECTED" | "FINALIZED";
 export type ReviewAction = "approved" | "changes_requested" | "rejected";
-export type AuditEventType =
-  | "case.created"
-  | "artifact.added"
-  | "artifact.removed"
-  | "document.ingested"
-  | "fhir.imported"
-  | "fhir.bundle.imported"
-  | "packet.drafted"
-  | "review.submitted"
-  | "packet.finalized"
-  | "case.deleted";
-export type AuditEventOutcome = "success";
+export type { AuditEventOutcome, AuditEventRecord, AuditEventType, CreateAuditEventInput } from "../core/audit-events";
 
 export interface CaseIntake {
   chiefConcern: string;
@@ -67,6 +69,7 @@ export interface DocumentIngestionResult {
   normalizedCharacterCount: number;
   excerptCharacterCount: number;
   truncated: boolean;
+  normalizationProfile: DocumentNormalizationProfile;
 }
 
 export interface FhirImportInput {
@@ -89,6 +92,7 @@ export interface FhirImportResult {
   resourceType: FhirImportResourceType;
   transportContentType: FhirTransportContentType;
   sourceContentType: DocumentContentType;
+  importProfile: FhirImportProfile;
   title: string;
   sourceDate?: string;
 }
@@ -96,6 +100,8 @@ export interface FhirImportResult {
 export interface FhirBundleImportResult {
   resourceType: "Bundle";
   bundleType: FhirBundleType;
+  bundleProfile: FhirBundleProfile;
+  entryProfiles: FhirImportProfile[];
   artifactCount: number;
   transportContentType: FhirTransportContentType;
   usedExternalAttachmentFetch: boolean;
@@ -156,19 +162,6 @@ export interface SubmitReviewInput {
   comments?: string;
 }
 
-export interface AuditEventRecord {
-  auditId: string;
-  caseId: string;
-  packetId?: string;
-  eventType: AuditEventType;
-  action: string;
-  occurredAt: string;
-  recordedAt: string;
-  actorId?: string;
-  outcome: AuditEventOutcome;
-  details?: Record<string, string | number | boolean | null>;
-}
-
 export interface AnamnesisCase {
   caseId: string;
   patientLabel?: string;
@@ -201,6 +194,7 @@ export interface AnamnesisStore {
 export interface AuditTrailStore {
   append(event: AuditEventRecord): Promise<void>;
   listByCase(caseId: string): Promise<AuditEventRecord[]>;
+  listByCorrelationId(correlationId: string): Promise<AuditEventRecord[]>;
   countEvents(): Promise<number>;
 }
 
@@ -347,12 +341,14 @@ interface ParsedFhirImport {
   sourceDate?: string;
   provenance?: string;
   resourceType: FhirImportResourceType;
+  importProfile: FhirImportProfile;
   sourceContentType: DocumentContentType;
   textContent: string;
 }
 
 interface ParsedBundleImport {
   bundleType: FhirBundleType;
+  bundleProfile: FhirBundleProfile;
   entries: ParsedFhirImport[];
   usedExternalAttachmentFetch: boolean;
 }
@@ -389,6 +385,7 @@ function parseBinaryImport(input: FhirImportInput): ParsedFhirImport {
     sourceDate: input.sourceDate,
     provenance: appendFhirProvenance(input.provenance, "Binary"),
     resourceType: "Binary",
+    importProfile: classifyFhirImportProfile("Binary", "inline"),
     sourceContentType,
     textContent: decodeBase64Utf8(data),
   };
@@ -479,6 +476,7 @@ function parseDocumentReferenceImport(input: FhirImportInput): ParsedFhirImport 
       deriveSourceDate(attachmentCreation),
     provenance: appendFhirProvenance(input.provenance, "DocumentReference"),
     resourceType: "DocumentReference",
+    importProfile: classifyFhirImportProfile("DocumentReference", "inline"),
     sourceContentType: selectedContentType,
     textContent: decodeBase64Utf8(selectedData),
   };
@@ -581,6 +579,7 @@ async function parseDocumentReferenceImportFromExternalAttachment(
       `attachment-url:${attachment.url}`,
     ),
     resourceType: "DocumentReference",
+    importProfile: classifyFhirImportProfile("DocumentReference", "external"),
     sourceContentType,
     textContent: fetchedAttachment.content,
   };
@@ -696,6 +695,7 @@ async function parseFhirBundle(
 
   return {
     bundleType,
+    bundleProfile: classifyFhirBundleProfile(bundleType),
     entries: parsedEntries,
     usedExternalAttachmentFetch,
   };
@@ -826,6 +826,7 @@ export function ingestDocument(
       normalizedCharacterCount: normalized.length,
       excerptCharacterCount: excerpt.excerpt.length,
       truncated: excerpt.truncated,
+      normalizationProfile: classifyDocumentNormalizationProfile(input.contentType),
     },
   };
 }
@@ -860,6 +861,7 @@ export function ingestFhirResource(
       resourceType: parsed.resourceType,
       transportContentType: "application/fhir+json",
       sourceContentType: parsed.sourceContentType,
+      importProfile: parsed.importProfile,
       title: parsed.title,
       sourceDate: parsed.sourceDate,
     },
@@ -908,6 +910,8 @@ export async function ingestFhirBundle(
     bundleImport: {
       resourceType: "Bundle",
       bundleType: parsedBundle.bundleType,
+      bundleProfile: parsedBundle.bundleProfile,
+      entryProfiles: parsedBundle.entries.map((entry) => entry.importProfile),
       artifactCount: artifacts.length,
       transportContentType: "application/fhir+json",
       usedExternalAttachmentFetch: parsedBundle.usedExternalAttachmentFetch,
@@ -1083,23 +1087,10 @@ export function buildOperationsSummary(
 }
 
 export function createAuditEvent(
-  input: Omit<AuditEventRecord, "auditId" | "recordedAt" | "outcome"> & {
-    outcome?: AuditEventOutcome;
-  },
+  input: CreateAuditEventInput,
   now = new Date(),
 ): AuditEventRecord {
-  return {
-    auditId: randomUUID(),
-    caseId: input.caseId,
-    packetId: input.packetId,
-    eventType: input.eventType,
-    action: input.action,
-    occurredAt: input.occurredAt,
-    recordedAt: toIso(now),
-    actorId: input.actorId,
-    outcome: input.outcome ?? "success",
-    details: input.details,
-  };
+  return createTypedAuditEvent(input, now);
 }
 
 const REVIEW_ACTION_TO_STATUS: Record<ReviewAction, PhysicianPacketStatus> = {

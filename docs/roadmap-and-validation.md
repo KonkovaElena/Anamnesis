@@ -10,11 +10,19 @@ tags: [anamnesis, healthcare, roadmap, validation]
 
 ## Current Validation Rail
 
-Run these commands in the standalone package:
+For a publication-grade local verification pass in the standalone package, run:
 
 ```bash
-npm test
+npm run validate:public-export
+```
+
+That aggregate rail currently expands to:
+
+```bash
+npm run lint
+npm run test:coverage
 npm run build
+npm run audit:prod
 ```
 
 Then verify:
@@ -23,13 +31,28 @@ Then verify:
 - `GET /readyz`
 - `GET /metrics`
 
-This remains the minimum closure rail for implemented scope.
+This is the current local closure rail for implemented scope.
+
+The separate live GitHub publication state should be checked against `docs/investor/GITHUB_POST_PUSH_CHECK_2026_04_03.md`.
+
+## Current GitHub Publication Follow-Through
+
+The April 3, 2026 post-push audit changes the order of remaining external work.
+
+Highest-priority maintainer-side follow-up:
+
+1. enable dependency graph so the committed `dependency-review` workflow can actually enforce pull-request policy;
+2. enable repository-side security analysis surfaces such as vulnerability alerts, automated security fixes, and private vulnerability reporting as appropriate;
+3. configure branch protection or rulesets only after the intended required checks are all genuinely passable.
+
+These are repository-operations tasks, not product-scope upgrades.
 
 ## Immediate April 2026 Priorities
 
 1. Typed artifact-normalization fixtures and a broader evaluation corpus for the existing text and FHIR seams.
 2. More explicit interoperability narrowing through profile-aware tests before any broader FHIR claim.
-3. A future local-model experimentation rail behind an adapter boundary and offline evaluation only, not in the public write path.
+3. Close the GitHub-side dependency-graph and repository-protection gap recorded in the post-push audit.
+4. A future local-model experimentation rail behind an adapter boundary and offline evaluation only, not in the public write path.
 
 ## Completed In v1.0.0
 
@@ -95,7 +118,7 @@ This remains the minimum closure rail for implemented scope.
 ## MicroPhoenix-Derived Promotion Rules
 
 - code, tests, docs, and evidence should move together before a capability is presented as real;
-- the authority stack is local and explicit: `design.md` -> `docs/roadmap-and-validation.md` -> `docs/academic/evidence-register.md` -> `docs/claim-boundary.md`;
+- the authority stack is local and explicit: `design.md` -> `docs/design-refresh-2026-04-03.md` -> `docs/roadmap-and-validation.md` -> `docs/academic/evidence-register.md` -> `docs/claim-boundary.md`;
 - adding a new model runtime, agent, or serving sidecar is not enough to widen public claims;
 - future AI subsystems need evaluation fixtures, failure taxonomies, and audit visibility before they touch the main workflow;
 - architecture should be transplanted minimally: explicit composition and adapter seams first, heavier platform machinery later only if justified.

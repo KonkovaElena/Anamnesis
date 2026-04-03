@@ -13,12 +13,14 @@ tags: [anamnesis, healthcare, evidence, academic]
 - local implementation docs for the current runtime boundary;
 - normalized March 30, 2026 design and evidence material folded into this standalone repository at export time;
 - April 3, 2026 external refresh across interoperability, web-service security, local-model serving, and medical foundation-model positioning;
+- April 3, 2026 standalone design refresh and live GitHub post-push repository audit;
 - 2025-2026 research papers used to derive operational controls, not to widen public claims;
 - user research memo treated as roadmap and risk input only.
 
 ## Local Authority Surfaces
 
 - `design.md`
+- `docs/design-refresh-2026-04-03.md`
 - `docs/roadmap-and-validation.md`
 - `docs/claim-boundary.md`
 - `docs/architecture/overview.md`
@@ -27,13 +29,22 @@ tags: [anamnesis, healthcare, evidence, academic]
 - `docs/traceability-matrix.md`
 - `docs/regulatory/positioning.md`
 
+## Publication-State Evidence Surfaces
+
+- `docs/investor/GITHUB_POST_PUSH_CHECK_2026_04_03.md`
+- `docs/investor/GITHUB_PUBLIC_AUDIT_2026_04.md`
+
 ## Provenance Boundary
 
-This repository intentionally internalizes its March 30, 2026 export snapshot and an April 3, 2026 evidence refresh so it can stand on its own.
+This repository intentionally internalizes its March 30, 2026 export snapshot, the April 3, 2026 evidence refresh, and the first live GitHub post-push audit so it can stand on its own.
 
 The local authority for standalone claims is the local authority set above.
 
+The local authority for live publication-state claims is the publication-state evidence set above.
+
 Research-to-phase decisions for this standalone live in `docs/roadmap-and-validation.md`.
+
+Repository-operations facts such as workflow registration, dependency-review activation state, and admin-bound GitHub settings gaps should be sourced from the post-push audit note rather than inferred from YAML files alone.
 
 No scope upgrade should be inferred from model availability, benchmark tables, or architectural ideas alone.
 
