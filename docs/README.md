@@ -5,8 +5,10 @@ This page routes the active documentation surfaces for Anamnesis.
 ## Product And Architecture
 
 - [../design.md](../design.md)
+- [../openapi.yaml](../openapi.yaml)
 - [architecture/overview.md](architecture/overview.md)
 - [api-scope.md](api-scope.md)
+- [interop/README.md](interop/README.md)
 - [status-model.md](status-model.md)
 
 ## Safety, Scope, And Roadmap
@@ -18,6 +20,7 @@ This page routes the active documentation surfaces for Anamnesis.
 ## Evidence And Research
 
 - [academic/evidence-register.md](academic/evidence-register.md)
+- [traceability-matrix.md](traceability-matrix.md)
 
 ## Investor And Publication Pack
 

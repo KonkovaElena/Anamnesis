@@ -5,6 +5,7 @@ import { type AddressInfo } from "node:net";
 import test from "node:test";
 import { createApp } from "../src/application/create-app";
 import { createAuthMiddleware } from "../src/application/auth-middleware";
+import { bootstrap } from "../src/bootstrap";
 import { InMemoryAuditTrailStore } from "../src/infrastructure/InMemoryAuditTrailStore";
 import { InMemoryAnamnesisStore } from "../src/infrastructure/InMemoryAnamnesisStore";
 
@@ -94,9 +95,36 @@ test("metrics bypasses auth", async () => {
   });
 });
 
-test("dev mode without API_KEY allows all requests", async () => {
+test("createApp allows requests when no auth middleware is wired", async () => {
   await withAuthServer(undefined, async (baseUrl) => {
     const response = await fetch(`${baseUrl}/api/cases`);
     assert.equal(response.status, 200);
   });
+});
+
+test("bootstrap rejects missing API_KEY unless insecure dev auth is explicitly enabled", () => {
+  assert.throws(
+    () => bootstrap(),
+    /ALLOW_INSECURE_DEV_AUTH/i,
+  );
+});
+
+test("bootstrap allows missing API_KEY when insecure dev auth is explicitly enabled", () => {
+  const result = bootstrap({
+    allowInsecureDevAuth: true,
+  });
+
+  assert.ok(result.app);
+  result.closeStore?.();
+});
+
+test("bootstrap rejects insecure dev auth when node environment is production", () => {
+  assert.throws(
+    () =>
+      bootstrap({
+        allowInsecureDevAuth: true,
+        nodeEnv: "production",
+      }),
+    /production/i,
+  );
 });

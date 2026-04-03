@@ -32,7 +32,7 @@ The current standalone uses a reduced runtime chain:
 | --- | --- |
 | Domain | case workflow state, artifact model, bounded text-document normalization, bounded FHIR resource and Bundle import parsing, physician packet draft/review/finalization model, audit event model |
 | Application | HTTP routes, request validation, response contracts, error mapping, auth middleware, rate limiting, metrics, JSON-only ingestion boundary, bounded FHIR import wrapper routes |
-| Infrastructure | durable SQLite persistence with AES-256-GCM encryption at rest, append-only audit persistence, bounded external attachment fetch, in-memory fallbacks |
+| Infrastructure | durable SQLite persistence with AES-256-GCM encryption at rest, append-only audit persistence, bounded external attachment fetch with public-target validation and optional host allowlisting, in-memory fallbacks |
 
 ## Deliberately Missing
 - multipart upload pipeline;

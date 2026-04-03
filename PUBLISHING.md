@@ -57,6 +57,7 @@ Recommended settings before public announcement:
 
 - create a ruleset or branch protection for `main`;
 - require pull requests before merge;
+- require the `CI / Quality` check;
 - require the `CI / Verify (ubuntu-latest)` and `CI / Verify (windows-latest)` checks;
 - require code owner review when collaborators are added;
 - enable Dependency graph;
@@ -82,13 +83,15 @@ After push, confirm the public repository surfaces resolve correctly:
 - `.github/CODEOWNERS` resolves owners on the default branch
 - `.github/dependabot.yml` is accepted without schema errors
 - `.github/workflows/codeql.yml` produces code-scanning alerts after the first run
+- README deployment notes still match the intended `/metrics` access model and reverse-proxy configuration for rate limiting
 
 ## 8. Release Hygiene
 
 Before the first public release:
 
-1. Confirm `npm test` passes.
-2. Confirm `npm run build` passes.
-3. Update `CHANGELOG.md`.
-4. Verify docs and README still match runtime behavior and scope boundaries.
-5. Verify `git status` is clean and `.env`, `data/`, `node_modules/`, `dist/`, and `coverage/` remain untracked aside from intentional templates.
+1. Confirm `npm run validate:public-export` passes.
+2. Confirm `npm test` passes.
+3. Confirm `npm run build` passes.
+4. Update `CHANGELOG.md`.
+5. Verify docs and README still match runtime behavior, scope boundaries, `/metrics` access expectations, and reverse-proxy deployment notes.
+6. Verify `git status` is clean and `.env`, `data/`, `node_modules/`, `dist/`, and `coverage/` remain untracked aside from intentional templates.

@@ -1,0 +1,1236 @@
+openapi: 3.1.0
+info:
+  title: Anamnesis HTTP API
+  version: 1.0.0
+  summary: Narrow clinician-in-the-loop workflow API for case intake, bounded evidence ingestion, packet drafting, review, and audit.
+  description: |
+    The Anamnesis API is a narrow workflow surface for organizing intake, source artifacts,
+    bounded text and FHIR import seams, physician packet drafts, explicit clinician review,
+    packet finalization, and append-only audit history.
+
+    This API is not a diagnosis, treatment, prescription, or general-purpose FHIR server API.
+
+    Authentication model:
+    - application endpoints expect `Authorization: Bearer <API_KEY>` when `API_KEY` is configured;
+    - unauthenticated startup is allowed only when `ALLOW_INSECURE_DEV_AUTH=true` is explicitly set;
+    - the insecure development override is rejected when `NODE_ENV=production`.
+
+    Interoperability boundary:
+    - supported inline FHIR resource types: `Binary`, `DocumentReference`;
+    - supported bundle types: `document`, `collection`;
+    - supported textual content: `text/plain`, `text/markdown`;
+    - no CRUD/search/history/transaction `$operation` FHIR REST semantics are claimed here.
+  contact:
+    name: Anamnesis repository support
+    url: https://github.com/KonkovaElena/Anamnesis/issues
+  license:
+    name: MIT
+    identifier: MIT
+servers:
+  - url: http://localhost:4020
+    description: Local standalone default
+externalDocs:
+  description: Claim boundary and API scope companion docs
+  url: ./docs/api-scope.md
+tags:
+  - name: Cases
+    description: Case creation, retrieval, listing, and deletion.
+  - name: Artifacts
+    description: Source artifact registration and removal.
+  - name: Ingestion
+    description: Text document ingestion into bounded source artifacts.
+  - name: FHIR
+    description: Narrow FHIR-compatible import seams.
+  - name: Packets
+    description: Physician packet draft and finalization workflow.
+  - name: Reviews
+    description: Explicit clinician review ledger.
+  - name: Audit
+    description: Append-only audit history by case.
+  - name: Operations
+    description: Aggregate operations summary and metrics.
+  - name: Health
+    description: Liveness and readiness probes.
+security:
+  - bearerAuth: []
+paths:
+  /api/cases:
+    post:
+      tags: [Cases]
+      summary: Create case
+      operationId: createCase
+      description: Create a case with structured intake. New cases start in `INTAKING`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCaseRequest'
+      responses:
+        '201':
+          description: Case created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+    get:
+      tags: [Cases]
+      summary: List cases
+      operationId: listCases
+      responses:
+        '200':
+          description: Cases listed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseListResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+  /api/cases/{caseId}:
+    parameters:
+      - $ref: '#/components/parameters/CaseId'
+    get:
+      tags: [Cases]
+      summary: Get case
+      operationId: getCase
+      responses:
+        '200':
+          description: Case retrieved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+    delete:
+      tags: [Cases]
+      summary: Delete case
+      operationId: deleteCase
+      description: Delete a case and append a `case.deleted` audit event.
+      responses:
+        '204':
+          description: Case deleted.
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+  /api/cases/{caseId}/artifacts:
+    parameters:
+      - $ref: '#/components/parameters/CaseId'
+    post:
+      tags: [Artifacts]
+      summary: Add source artifact
+      operationId: addArtifact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddArtifactRequest'
+      responses:
+        '201':
+          description: Artifact added and case returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+  /api/cases/{caseId}/artifacts/{artifactId}:
+    parameters:
+      - $ref: '#/components/parameters/CaseId'
+      - $ref: '#/components/parameters/ArtifactId'
+    delete:
+      tags: [Artifacts]
+      summary: Remove source artifact
+      operationId: removeArtifact
+      responses:
+        '200':
+          description: Artifact removed and case returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseEnvelope'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+  /api/cases/{caseId}/document-ingestions:
+    parameters:
+      - $ref: '#/components/parameters/CaseId'
+    post:
+      tags: [Ingestion]
+      summary: Ingest bounded text document
+      operationId: ingestDocument
+      description: |
+        Normalize a bounded `text/plain` or `text/markdown` payload into a source artifact.
+        Request body parsing is bounded at the HTTP layer and the domain stores only a bounded excerpt.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentIngestionRequest'
+      responses:
+        '201':
+          description: Document ingested.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentIngestionResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+  /api/cases/{caseId}/fhir-imports:
+    parameters:
+      - $ref: '#/components/parameters/CaseId'
+    post:
+      tags: [FHIR]
+      summary: Import one supported inline FHIR resource
+      operationId: importFhirResource
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FhirImportRequest'
+      responses:
+        '201':
+          description: FHIR resource imported.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FhirImportResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse400'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+  /api/cases/{caseId}/fhir-bundle-imports:
+    parameters:
+      - $ref: '#/components/parameters/CaseId'
+    post:
+      tags: [FHIR]
+      summary: Import supported FHIR bundle entries
+      operationId: importFhirBundle
+      description: |
+        Import a `document` or `collection` bundle containing supported `Binary` and `DocumentReference`
+        entries. External attachment fetch remains opt-in and heavily bounded.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FhirBundleImportRequest'
+      responses:
+        '201':
+          description: FHIR bundle imported.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FhirBundleImportResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse400'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+  /api/cases/{caseId}/physician-packets:
+    parameters:
+      - $ref: '#/components/parameters/CaseId'
+    post:
+      tags: [Packets]
+      summary: Draft physician packet
+      operationId: createPhysicianPacket
+      description: Draft a workflow packet from the current case state. At least one artifact must already exist.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePacketRequest'
+      responses:
+        '201':
+          description: Packet drafted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhysicianPacketCreateResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+    get:
+      tags: [Packets]
+      summary: List physician packets
+      operationId: listPhysicianPackets
+      responses:
+        '200':
+          description: Packets listed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhysicianPacketListResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+  /api/cases/{caseId}/physician-packets/{packetId}/reviews:
+    parameters:
+      - $ref: '#/components/parameters/CaseId'
+      - $ref: '#/components/parameters/PacketId'
+    post:
+      tags: [Reviews]
+      summary: Submit clinician review
+      operationId: submitReview
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitReviewRequest'
+      responses:
+        '201':
+          description: Review appended.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewCreateResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+    get:
+      tags: [Reviews]
+      summary: Get review ledger
+      operationId: getPacketReviews
+      responses:
+        '200':
+          description: Review ledger returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewListResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+  /api/cases/{caseId}/physician-packets/{packetId}/finalize:
+    parameters:
+      - $ref: '#/components/parameters/CaseId'
+      - $ref: '#/components/parameters/PacketId'
+    post:
+      tags: [Packets]
+      summary: Finalize physician packet
+      operationId: finalizePhysicianPacket
+      description: Finalize a clinician-approved packet that is not stale.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FinalizePacketRequest'
+      responses:
+        '200':
+          description: Packet finalized.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhysicianPacketCreateResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+  /api/cases/{caseId}/audit-events:
+    parameters:
+      - $ref: '#/components/parameters/CaseId'
+    get:
+      tags: [Audit]
+      summary: List audit events by case id
+      operationId: listAuditEventsByCase
+      description: |
+        Return append-only audit history by `caseId`. This endpoint is keyed to the audit store and may still
+        return events after the case itself has been deleted.
+      responses:
+        '200':
+          description: Audit events returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditEventListResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+  /api/operations/summary:
+    get:
+      tags: [Operations]
+      summary: Get operations summary
+      operationId: getOperationsSummary
+      responses:
+        '200':
+          description: Operations summary returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationsSummaryResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+  /healthz:
+    get:
+      tags: [Health]
+      summary: Liveness probe
+      operationId: healthz
+      security: []
+      responses:
+        '200':
+          description: Process is alive.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /readyz:
+    get:
+      tags: [Health]
+      summary: Readiness probe
+      operationId: readyz
+      security: []
+      responses:
+        '200':
+          description: Process is ready.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadyResponse'
+        '503':
+          description: Process is shutting down and is no longer ready.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShuttingDownResponse'
+  /metrics:
+    get:
+      tags: [Operations]
+      summary: Prometheus-style metrics
+      operationId: metrics
+      security: []
+      responses:
+        '200':
+          description: Plain-text metrics surface.
+          content:
+            text/plain:
+              schema:
+                type: string
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque API key
+  parameters:
+    CaseId:
+      name: caseId
+      in: path
+      required: true
+      description: Case UUID.
+      schema:
+        type: string
+        format: uuid
+    ArtifactId:
+      name: artifactId
+      in: path
+      required: true
+      description: Artifact UUID.
+      schema:
+        type: string
+        format: uuid
+    PacketId:
+      name: packetId
+      in: path
+      required: true
+      description: Physician packet UUID.
+      schema:
+        type: string
+        format: uuid
+  responses:
+    ValidationError:
+      description: Request validation failed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationErrorResponse'
+    UnauthorizedError:
+      description: Missing or invalid bearer token.
+      headers:
+        WWW-Authenticate:
+          description: Bearer authentication challenge.
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFoundError:
+      description: Requested resource was not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ConflictError:
+      description: Workflow or domain conflict.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ErrorResponse400:
+      description: Domain or parsing error.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    TooManyRequestsError:
+      description: Rate limit exceeded.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    DateOnly:
+      type: string
+      pattern: '^\d{4}-\d{2}-\d{2}$'
+      examples: ['2026-04-03']
+    CaseStatus:
+      type: string
+      enum: [INTAKING, READY_FOR_PACKET, REVIEW_REQUIRED]
+    ArtifactType:
+      type: string
+      enum: [note, lab, summary, report, imaging-summary]
+    DocumentContentType:
+      type: string
+      enum: [text/plain, text/markdown]
+    ReviewAction:
+      type: string
+      enum: [approved, changes_requested, rejected]
+    PhysicianPacketStatus:
+      type: string
+      enum: [DRAFT_REVIEW_REQUIRED, CLINICIAN_APPROVED, CHANGES_REQUESTED, REJECTED, FINALIZED]
+    FhirBundleType:
+      type: string
+      enum: [document, collection]
+    FhirImportResourceType:
+      type: string
+      enum: [Binary, DocumentReference]
+    CaseIntake:
+      type: object
+      additionalProperties: false
+      required: [chiefConcern, symptomSummary, historySummary, questionsForClinician]
+      properties:
+        chiefConcern:
+          type: string
+          minLength: 1
+          maxLength: 200
+        symptomSummary:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        historySummary:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        questionsForClinician:
+          type: array
+          maxItems: 12
+          items:
+            type: string
+            minLength: 1
+            maxLength: 300
+    SourceArtifact:
+      type: object
+      additionalProperties: false
+      required: [artifactId, artifactType, title, summary, createdAt]
+      properties:
+        artifactId:
+          type: string
+          format: uuid
+        artifactType:
+          $ref: '#/components/schemas/ArtifactType'
+        title:
+          type: string
+        summary:
+          type: string
+        sourceDate:
+          $ref: '#/components/schemas/DateOnly'
+        provenance:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    ClinicalReviewEntry:
+      type: object
+      additionalProperties: false
+      required: [reviewId, reviewerName, action, createdAt]
+      properties:
+        reviewId:
+          type: string
+          format: uuid
+        reviewerName:
+          type: string
+        action:
+          $ref: '#/components/schemas/ReviewAction'
+        comments:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    PhysicianPacketSection:
+      type: object
+      additionalProperties: false
+      required: [label, content]
+      properties:
+        label:
+          type: string
+        content:
+          type: string
+    PhysicianPacket:
+      type: object
+      additionalProperties: false
+      required:
+        - packetId
+        - status
+        - isStale
+        - createdAt
+        - disclaimer
+        - title
+        - artifactIds
+        - sections
+        - reviews
+      properties:
+        packetId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/PhysicianPacketStatus'
+        isStale:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        staleAt:
+          type: string
+          format: date-time
+        requestedBy:
+          type: string
+        focus:
+          type: string
+        disclaimer:
+          type: string
+        title:
+          type: string
+        artifactIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        sections:
+          type: array
+          items:
+            $ref: '#/components/schemas/PhysicianPacketSection'
+        reviews:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClinicalReviewEntry'
+        finalizedAt:
+          type: string
+          format: date-time
+        finalizedBy:
+          type: string
+        finalizationReason:
+          type: string
+        finalizedFingerprint:
+          type: string
+    AnamnesisCase:
+      type: object
+      additionalProperties: false
+      required:
+        - caseId
+        - status
+        - createdAt
+        - updatedAt
+        - intake
+        - artifacts
+        - physicianPackets
+      properties:
+        caseId:
+          type: string
+          format: uuid
+        patientLabel:
+          type: string
+        status:
+          $ref: '#/components/schemas/CaseStatus'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        intake:
+          $ref: '#/components/schemas/CaseIntake'
+        artifacts:
+          type: array
+          items:
+            $ref: '#/components/schemas/SourceArtifact'
+        physicianPackets:
+          type: array
+          items:
+            $ref: '#/components/schemas/PhysicianPacket'
+    DocumentIngestionResult:
+      type: object
+      additionalProperties: false
+      required: [contentType, normalizedCharacterCount, excerptCharacterCount, truncated]
+      properties:
+        contentType:
+          $ref: '#/components/schemas/DocumentContentType'
+        filename:
+          type: string
+        normalizedCharacterCount:
+          type: integer
+          minimum: 0
+        excerptCharacterCount:
+          type: integer
+          minimum: 0
+        truncated:
+          type: boolean
+    FhirImportResult:
+      type: object
+      additionalProperties: false
+      required: [resourceType, transportContentType, sourceContentType, title]
+      properties:
+        resourceType:
+          $ref: '#/components/schemas/FhirImportResourceType'
+        transportContentType:
+          type: string
+          const: application/fhir+json
+        sourceContentType:
+          $ref: '#/components/schemas/DocumentContentType'
+        title:
+          type: string
+        sourceDate:
+          $ref: '#/components/schemas/DateOnly'
+    FhirBundleImportResult:
+      type: object
+      additionalProperties: false
+      required: [resourceType, bundleType, artifactCount, transportContentType, usedExternalAttachmentFetch]
+      properties:
+        resourceType:
+          type: string
+          const: Bundle
+        bundleType:
+          $ref: '#/components/schemas/FhirBundleType'
+        artifactCount:
+          type: integer
+          minimum: 1
+        transportContentType:
+          type: string
+          const: application/fhir+json
+        usedExternalAttachmentFetch:
+          type: boolean
+    AuditEventRecord:
+      type: object
+      additionalProperties: false
+      required: [auditId, caseId, eventType, action, occurredAt, recordedAt, outcome]
+      properties:
+        auditId:
+          type: string
+          format: uuid
+        caseId:
+          type: string
+          format: uuid
+        packetId:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+          enum:
+            - case.created
+            - artifact.added
+            - artifact.removed
+            - document.ingested
+            - fhir.imported
+            - fhir.bundle.imported
+            - packet.drafted
+            - review.submitted
+            - packet.finalized
+            - case.deleted
+        action:
+          type: string
+        occurredAt:
+          type: string
+          format: date-time
+        recordedAt:
+          type: string
+          format: date-time
+        actorId:
+          type: string
+        outcome:
+          type: string
+          const: success
+        details:
+          type: object
+          additionalProperties: true
+    OperationsSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - totalCases
+        - totalArtifacts
+        - totalPackets
+        - totalReviews
+        - totalFinalizedPackets
+        - totalAuditEvents
+        - statusCounts
+        - lastUpdatedAt
+      properties:
+        totalCases:
+          type: integer
+          minimum: 0
+        totalArtifacts:
+          type: integer
+          minimum: 0
+        totalPackets:
+          type: integer
+          minimum: 0
+        totalReviews:
+          type: integer
+          minimum: 0
+        totalFinalizedPackets:
+          type: integer
+          minimum: 0
+        totalAuditEvents:
+          type: integer
+          minimum: 0
+        statusCounts:
+          type: object
+          additionalProperties: false
+          required: [INTAKING, READY_FOR_PACKET, REVIEW_REQUIRED]
+          properties:
+            INTAKING:
+              type: integer
+              minimum: 0
+            READY_FOR_PACKET:
+              type: integer
+              minimum: 0
+            REVIEW_REQUIRED:
+              type: integer
+              minimum: 0
+        lastUpdatedAt:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+    ValidationIssue:
+      type: object
+      additionalProperties: true
+      properties:
+        code:
+          type: string
+        path:
+          type: array
+          items:
+            oneOf:
+              - type: string
+              - type: integer
+        message:
+          type: string
+        keys:
+          type: array
+          items:
+            type: string
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+    ValidationErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [code, message, details]
+      properties:
+        code:
+          type: string
+          const: invalid_input
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationIssue'
+    CaseEnvelope:
+      type: object
+      additionalProperties: false
+      required: [case]
+      properties:
+        case:
+          $ref: '#/components/schemas/AnamnesisCase'
+    CaseListResponse:
+      type: object
+      additionalProperties: false
+      required: [cases, meta]
+      properties:
+        cases:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnamnesisCase'
+        meta:
+          type: object
+          additionalProperties: false
+          required: [totalCases]
+          properties:
+            totalCases:
+              type: integer
+              minimum: 0
+    DocumentIngestionResponse:
+      type: object
+      additionalProperties: false
+      required: [case, artifact, ingestion]
+      properties:
+        case:
+          $ref: '#/components/schemas/AnamnesisCase'
+        artifact:
+          $ref: '#/components/schemas/SourceArtifact'
+        ingestion:
+          $ref: '#/components/schemas/DocumentIngestionResult'
+    FhirImportResponse:
+      type: object
+      additionalProperties: false
+      required: [case, artifact, ingestion, fhirImport]
+      properties:
+        case:
+          $ref: '#/components/schemas/AnamnesisCase'
+        artifact:
+          $ref: '#/components/schemas/SourceArtifact'
+        ingestion:
+          $ref: '#/components/schemas/DocumentIngestionResult'
+        fhirImport:
+          $ref: '#/components/schemas/FhirImportResult'
+    FhirBundleImportResponse:
+      type: object
+      additionalProperties: false
+      required: [case, artifacts, ingestions, bundleImport]
+      properties:
+        case:
+          $ref: '#/components/schemas/AnamnesisCase'
+        artifacts:
+          type: array
+          items:
+            $ref: '#/components/schemas/SourceArtifact'
+        ingestions:
+          type: array
+          items:
+            $ref: '#/components/schemas/DocumentIngestionResult'
+        bundleImport:
+          $ref: '#/components/schemas/FhirBundleImportResult'
+    PhysicianPacketCreateResponse:
+      type: object
+      additionalProperties: false
+      required: [case, packet]
+      properties:
+        case:
+          $ref: '#/components/schemas/AnamnesisCase'
+        packet:
+          $ref: '#/components/schemas/PhysicianPacket'
+    PhysicianPacketListResponse:
+      type: object
+      additionalProperties: false
+      required: [physicianPackets, meta]
+      properties:
+        physicianPackets:
+          type: array
+          items:
+            $ref: '#/components/schemas/PhysicianPacket'
+        meta:
+          type: object
+          additionalProperties: false
+          required: [totalPackets]
+          properties:
+            totalPackets:
+              type: integer
+              minimum: 0
+    ReviewCreateResponse:
+      type: object
+      additionalProperties: false
+      required: [review]
+      properties:
+        review:
+          $ref: '#/components/schemas/ClinicalReviewEntry'
+    ReviewListResponse:
+      type: object
+      additionalProperties: false
+      required: [reviews, meta]
+      properties:
+        reviews:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClinicalReviewEntry'
+        meta:
+          type: object
+          additionalProperties: false
+          required: [totalReviews, packetStatus]
+          properties:
+            totalReviews:
+              type: integer
+              minimum: 0
+            packetStatus:
+              $ref: '#/components/schemas/PhysicianPacketStatus'
+    AuditEventListResponse:
+      type: object
+      additionalProperties: false
+      required: [events, meta]
+      properties:
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEventRecord'
+        meta:
+          type: object
+          additionalProperties: false
+          required: [totalEvents]
+          properties:
+            totalEvents:
+              type: integer
+              minimum: 0
+    OperationsSummaryResponse:
+      type: object
+      additionalProperties: false
+      required: [summary]
+      properties:
+        summary:
+          $ref: '#/components/schemas/OperationsSummary'
+    HealthResponse:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          const: ok
+    ReadyResponse:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          const: ready
+    ShuttingDownResponse:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          const: shutting_down
+    CreateCaseRequest:
+      type: object
+      additionalProperties: false
+      required: [intake]
+      properties:
+        patientLabel:
+          type: string
+          minLength: 1
+          maxLength: 120
+        intake:
+          $ref: '#/components/schemas/CaseIntake'
+    AddArtifactRequest:
+      type: object
+      additionalProperties: false
+      required: [artifactType, title, summary]
+      properties:
+        artifactType:
+          $ref: '#/components/schemas/ArtifactType'
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        summary:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        sourceDate:
+          $ref: '#/components/schemas/DateOnly'
+        provenance:
+          type: string
+          minLength: 1
+          maxLength: 300
+    DocumentIngestionRequest:
+      type: object
+      additionalProperties: false
+      required: [artifactType, title, contentType, content]
+      properties:
+        artifactType:
+          $ref: '#/components/schemas/ArtifactType'
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        contentType:
+          $ref: '#/components/schemas/DocumentContentType'
+        content:
+          type: string
+          minLength: 1
+          maxLength: 12000
+        filename:
+          type: string
+          minLength: 1
+          maxLength: 160
+        sourceDate:
+          $ref: '#/components/schemas/DateOnly'
+        provenance:
+          type: string
+          minLength: 1
+          maxLength: 300
+    FhirResourcePayload:
+      type: object
+      required: [resourceType]
+      properties:
+        resourceType:
+          type: string
+      additionalProperties: true
+    FhirImportRequest:
+      type: object
+      additionalProperties: false
+      required: [resource]
+      properties:
+        artifactType:
+          $ref: '#/components/schemas/ArtifactType'
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        sourceDate:
+          $ref: '#/components/schemas/DateOnly'
+        provenance:
+          type: string
+          minLength: 1
+          maxLength: 300
+        resource:
+          $ref: '#/components/schemas/FhirResourcePayload'
+    FhirBundleImportRequest:
+      type: object
+      additionalProperties: false
+      required: [resource]
+      properties:
+        artifactType:
+          $ref: '#/components/schemas/ArtifactType'
+        sourceDate:
+          $ref: '#/components/schemas/DateOnly'
+        provenance:
+          type: string
+          minLength: 1
+          maxLength: 300
+        allowExternalAttachmentFetch:
+          type: boolean
+          default: false
+        resource:
+          $ref: '#/components/schemas/FhirResourcePayload'
+    CreatePacketRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        requestedBy:
+          type: string
+          minLength: 1
+          maxLength: 120
+        focus:
+          type: string
+          minLength: 1
+          maxLength: 300
+    SubmitReviewRequest:
+      type: object
+      additionalProperties: false
+      required: [reviewerName, action]
+      properties:
+        reviewerName:
+          type: string
+          minLength: 1
+          maxLength: 120
+        action:
+          $ref: '#/components/schemas/ReviewAction'
+        comments:
+          type: string
+          minLength: 1
+          maxLength: 4000
+    FinalizePacketRequest:
+      type: object
+      additionalProperties: false
+      required: [finalizedBy]
+      properties:
+        finalizedBy:
+          type: string
+          minLength: 1
+          maxLength: 120
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 4000

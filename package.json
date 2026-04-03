@@ -32,8 +32,12 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx watch src/index.ts",
+    "lint": "eslint .",
     "start": "node dist/index.js",
-    "test": "node --import tsx --test tests/**/*.test.ts"
+    "test": "node --import tsx --test tests/**/*.test.ts",
+    "test:coverage": "node --import tsx --test --experimental-test-coverage tests/**/*.test.ts",
+    "audit:prod": "npm audit --omit=dev --audit-level=high",
+    "validate:public-export": "npm run lint && npm run test:coverage && npm run build && npm run audit:prod"
   },
   "keywords": [
     "healthcare",
@@ -49,10 +53,14 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/express": "^5.0.6",
     "@types/node": "^25.5.0",
+    "eslint": "^10.1.0",
+    "globals": "^17.4.0",
     "tsx": "^4.21.0",
-    "typescript": "^6.0.2"
+    "typescript": "^6.0.2",
+    "typescript-eslint": "^8.58.0"
   }
 }

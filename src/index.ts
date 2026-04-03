@@ -18,12 +18,20 @@ async function main() {
   let shuttingDown = false;
 
   const apiKey = process.env.API_KEY?.trim() || undefined;
+  const nodeEnv = process.env.NODE_ENV?.trim().toLowerCase() || undefined;
+  const allowInsecureDevAuth = (process.env.ALLOW_INSECURE_DEV_AUTH?.trim().toLowerCase() === "true");
   const rateLimitRpm = Number(process.env.RATE_LIMIT_RPM ?? "0") || undefined;
   const storePath = process.env.STORE_PATH?.trim() || undefined;
   const encryptionKey = process.env.ENCRYPTION_KEY?.trim() || undefined;
+  const externalAttachmentAllowedHosts = (process.env.EXTERNAL_ATTACHMENT_HOST_ALLOWLIST ?? "")
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter((value) => value.length > 0);
 
-  if (!apiKey) {
-    process.stdout.write("[WARN] API_KEY is not set — all endpoints are unauthenticated. Set API_KEY in production.\n");
+  if (!apiKey && allowInsecureDevAuth) {
+    process.stdout.write(
+      "[WARN] API_KEY is not set — unauthenticated access is enabled only because ALLOW_INSECURE_DEV_AUTH=true was explicitly configured.\n",
+    );
   }
 
   if (!storePath) {
@@ -33,9 +41,12 @@ async function main() {
   const { app, closeStore } = bootstrap({
     isShuttingDown: () => shuttingDown,
     apiKey,
+    allowInsecureDevAuth,
+    nodeEnv,
     rateLimitRpm,
     storePath,
     encryptionKey,
+    externalAttachmentAllowedHosts,
   });
   const port = resolvePort();
 

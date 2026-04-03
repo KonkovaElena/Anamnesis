@@ -29,3 +29,5 @@ The standalone is intentionally framed as a clinician-in-the-loop workflow basel
 Do not describe the project as an autonomous doctor, diagnostic engine, or validated clinical system.
 
 Bounded FHIR Bundle ingestion and gated remote attachment fetch do not change that rule: they extend workflow intake only and still produce draft organizational artifacts for clinician review.
+
+Use [../interop/README.md](../interop/README.md) and [../traceability-matrix.md](../traceability-matrix.md) when evaluating whether a proposed interoperability or product statement is actually supported by code and tests.

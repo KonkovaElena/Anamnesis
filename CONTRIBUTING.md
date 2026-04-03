@@ -12,7 +12,8 @@ Thanks for considering a contribution to Anamnesis.
 
 ```bash
 npm install
-npm test
+npm run lint
+npm run test:coverage
 npm run build
 ```
 
@@ -34,10 +35,11 @@ Use `.env.example` as the runtime contract for local development.
 
 Before opening a pull request:
 
-1. Run `npm test`.
-2. Run `npm run build`.
-3. Update docs when routes, scope, security posture, or claim boundaries change.
-4. Summarize the blast radius and any operator-visible changes in the pull request body.
+1. Run `npm run lint`.
+2. Run `npm run test:coverage`.
+3. Run `npm run build`.
+4. Update docs when routes, scope, security posture, or claim boundaries change.
+5. Summarize the blast radius and any operator-visible changes in the pull request body.
 
 ## Issue Quality
 

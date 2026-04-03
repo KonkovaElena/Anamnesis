@@ -18,7 +18,7 @@ import {
 // ---------------------------------------------------------------------------
 
 async function withServer(run: (baseUrl: string) => Promise<void>) {
-  const { app } = bootstrap();
+  const { app } = bootstrap({ allowInsecureDevAuth: true });
   const server = createServer(app);
   server.listen(0, "127.0.0.1");
   await once(server, "listening");

@@ -9,7 +9,10 @@ async function withServer(
   run: (baseUrl: string) => Promise<void>,
   options?: Record<string, unknown>,
 ) {
-  const { app } = bootstrap(options as never);
+  const { app } = bootstrap({
+    allowInsecureDevAuth: true,
+    ...(options ?? {}),
+  } as never);
   const server = createServer(app);
   server.listen(0, "127.0.0.1");
   await once(server, "listening");

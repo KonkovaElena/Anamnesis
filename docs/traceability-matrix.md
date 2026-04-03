@@ -1,0 +1,50 @@
+---
+title: "Anamnesis Traceability Matrix"
+status: active
+version: "1.0.0"
+last_updated: "2026-04-03"
+tags: [anamnesis, traceability, evidence, reference]
+---
+
+# Traceability Matrix
+
+## Purpose
+
+Map implemented features to public claims, implementation anchors, and automated evidence.
+
+This page is the shortest route for checking whether a product or diligence statement is stronger than the actual repository evidence.
+
+## Matrix
+
+| Feature | Safe public claim | Implementation anchors | Automated evidence |
+| --- | --- | --- | --- |
+| Structured case intake | The system can create, list, retrieve, and delete workflow cases with typed intake data. | `src/application/create-app.ts`, `src/domain/anamnesis.ts` | `tests/api.test.ts`, `tests/store.test.ts` |
+| Source artifact management | The system can register and remove source artifacts and keep packet state synchronized. | `src/application/create-app.ts`, `src/domain/anamnesis.ts` | `tests/api.test.ts` |
+| Bounded text document ingestion | The system can normalize bounded plain-text and markdown inputs into workflow artifacts. | `src/application/create-app.ts`, `src/domain/anamnesis.ts` | `tests/document-ingestion-api.test.ts`, `tests/document-ingestion.test.ts` |
+| Narrow FHIR inline import | The system can import supported inline `Binary` and `DocumentReference` resources into workflow artifacts. | `src/application/create-app.ts`, `src/domain/anamnesis.ts` | `tests/fhir-import-api.test.ts`, `tests/fhir-import.test.ts` |
+| Narrow FHIR bundle import | The system can import supported `document` and `collection` bundles into workflow artifacts. | `src/application/create-app.ts`, `src/domain/anamnesis.ts` | `tests/fhir-bundle-import-api.test.ts`, `tests/fhir-bundle-import.test.ts` |
+| Gated remote attachment fetch | The system can dereference remote bundle attachments only through an opt-in, bounded, public-target-only path. | `src/infrastructure/HttpExternalAttachmentFetcher.ts`, `src/domain/anamnesis.ts`, `src/bootstrap.ts` | `tests/http-external-attachment-fetcher.test.ts`, `tests/fhir-bundle-import.test.ts` |
+| Secure-by-default auth startup | Normal runtime requires `API_KEY`; unauthenticated startup requires an explicit dev override and is blocked in production mode. | `src/index.ts`, `src/bootstrap.ts`, `src/application/auth-middleware.ts` | `tests/auth.test.ts` |
+| Review ledger and packet finalization | The system records explicit clinician reviews and finalizes only approved, non-stale packets. | `src/application/create-app.ts`, `src/domain/anamnesis.ts` | `tests/review-ledger.test.ts`, `tests/finalization.test.ts` |
+| Audit trail and operational counters | The system writes append-only audit events for write flows and exposes aggregate counters. | `src/application/create-app.ts`, `src/domain/anamnesis.ts`, `src/infrastructure/*AuditTrailStore.ts` | `tests/audit-trail.test.ts`, `tests/api.test.ts` |
+| Encrypted durable persistence | The system can persist cases in SQLite with AES-256-GCM encryption at rest when configured. | `src/infrastructure/SqliteAnamnesisStore.ts`, `src/infrastructure/encryption.ts`, `src/bootstrap.ts` | `tests/encryption.test.ts`, `tests/store.test.ts` |
+| Graceful shutdown | The process exposes health/readiness behavior and drains on shutdown. | `src/index.ts`, `src/graceful-shutdown.ts`, `src/application/create-app.ts` | `tests/shutdown.test.ts`, `tests/api.test.ts` |
+
+## Use Rule
+
+When proposing any external statement, verify that all four columns remain true:
+
+1. the feature exists;
+2. the public claim is no stronger than the feature;
+3. the implementation anchors still point to live code;
+4. the automated evidence still passes.
+
+If any column fails, the claim is not ready.
+
+## Related Surfaces
+
+- [claim-boundary.md](claim-boundary.md)
+- [api-scope.md](api-scope.md)
+- [interop/README.md](interop/README.md)
+- [security/posture-and-gaps.md](security/posture-and-gaps.md)
+- [../openapi.yaml](../openapi.yaml)

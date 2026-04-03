@@ -32,7 +32,7 @@ It implements a narrow workflow baseline that helps a user organize case intake,
 - bounded text document ingestion (`text/plain`, `text/markdown`) into source artifacts;
 - bounded FHIR-compatible import seams for inline `Binary` and `DocumentReference` resources carrying `text/plain` or `text/markdown` payloads;
 - bounded FHIR Bundle import seam for `document` and `collection` bundles;
-- explicit, gated `attachment.url` dereference over `https` for bounded text bundle attachments;
+- explicit, gated `attachment.url` dereference over `https` for bounded text bundle attachments that resolve only to public addresses, with optional host allowlisting;
 - artifact and case deletion;
 - physician packet draft generation;
 - explicit clinician review ledger (`approved`, `changes_requested`, `rejected`);
@@ -66,15 +66,41 @@ npm run build
 npm run dev
 ```
 
+Set either `API_KEY` or `ALLOW_INSECURE_DEV_AUTH=true` before starting the server.
+
 Default runtime port: `4020`
+
+## Deployment Notes
+
+- `/metrics` is treated as an operational endpoint. When `API_KEY` is configured, auth bypass is limited to `/healthz` and `/readyz`, so monitoring access should either send the bearer token or sit behind separate network controls.
+- If you enable `RATE_LIMIT_RPM` behind a reverse proxy or load balancer, configure Express proxy trust for the deployment topology before relying on `request.ip` for enforcement.
+
+## Validation
+
+For a publication-grade local verification pass:
+
+```bash
+npm run validate:public-export
+```
+
+If you want the individual steps instead of the aggregate script:
+
+```bash
+npm run lint
+npm run test:coverage
+npm run build
+npm run audit:prod
+```
 
 ## Environment Variables
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `PORT` | No | `4020` | HTTP listen port |
-| `API_KEY` | No | — | Bearer token for API authentication. When unset, endpoints are unauthenticated for local development. |
+| `API_KEY` | Yes unless explicit local-dev override is enabled | — | Bearer token for API authentication on application endpoints. |
+| `ALLOW_INSECURE_DEV_AUTH` | No | `false` | Explicit local-development override that allows startup without `API_KEY`. Rejected when `NODE_ENV=production`. |
 | `RATE_LIMIT_RPM` | No | `0` | Maximum requests per minute per IP. Health and readiness probes are exempt. |
+| `EXTERNAL_ATTACHMENT_HOST_ALLOWLIST` | No | — | Optional comma-separated hostname allowlist for external FHIR bundle attachment fetches. When set, only listed hosts are eligible in addition to the public-address checks. |
 | `STORE_PATH` | No | — | Path to SQLite database file. When unset, data is stored in memory only. |
 | `ENCRYPTION_KEY` | When `STORE_PATH` is set | — | 64-character hex string used for AES-256-GCM encryption at rest. |
 
@@ -105,9 +131,13 @@ OpenAPI description: [openapi.yaml](openapi.yaml)
 
 - [design.md](design.md)
 - [docs/README.md](docs/README.md)
+- [docs/api-scope.md](docs/api-scope.md)
 - [docs/architecture/overview.md](docs/architecture/overview.md)
 - [docs/claim-boundary.md](docs/claim-boundary.md)
+- [docs/interop/README.md](docs/interop/README.md)
 - [docs/roadmap-and-validation.md](docs/roadmap-and-validation.md)
+- [docs/traceability-matrix.md](docs/traceability-matrix.md)
+- [docs/security/posture-and-gaps.md](docs/security/posture-and-gaps.md)
 - [docs/academic/evidence-register.md](docs/academic/evidence-register.md)
 - [docs/regulatory/positioning.md](docs/regulatory/positioning.md)
 - [docs/investor/README.md](docs/investor/README.md)
@@ -120,6 +150,7 @@ OpenAPI description: [openapi.yaml](openapi.yaml)
 - [CONTRIBUTING.md](CONTRIBUTING.md) covers contribution flow.
 - [SECURITY.md](SECURITY.md) covers security reporting.
 - [CITATION.cff](CITATION.cff) provides machine-readable citation metadata.
+- `.github/workflows/ci.yml` and `.github/workflows/dependency-review.yml` define the current GitHub validation baseline.
 
 ## Claim Boundary
 

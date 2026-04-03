@@ -34,10 +34,11 @@ The project should earn any future medical positioning through explicit workflow
 
 - durable SQLite persistence with AES-256-GCM whole-record encryption at rest;
 - append-only audit trail storage paired with the case store;
+- secure-by-default Bearer auth at bootstrap; unauthenticated startup now requires explicit `ALLOW_INSECURE_DEV_AUTH=true` and is rejected when `NODE_ENV=production`;
 - JSON-only document-ingestion seam for `text/plain` and `text/markdown` content;
 - bounded FHIR-compatible import seam for inline `Binary` and `DocumentReference` resources carrying `text/plain` or `text/markdown` payloads;
 - bounded FHIR Bundle import seam for `document` or `collection` bundles that extract supported `Binary` and `DocumentReference` entries into source artifacts;
-- explicit, request-gated `https` dereference for `attachment.url` when the fetched response remains `text/plain` or `text/markdown` and within byte limits;
+- explicit, request-gated `https` dereference for `attachment.url` when the fetched response remains `text/plain` or `text/markdown`, stays within byte limits, resolves only to public addresses, and optionally matches an operator-supplied host allowlist;
 - in-memory fallback when `STORE_PATH` is not configured;
 - explicit bootstrap seam in `src/bootstrap.ts`;
 - reduced Domain -> Application -> Infrastructure split;

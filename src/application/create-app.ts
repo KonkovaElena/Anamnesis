@@ -2,12 +2,12 @@ import { randomUUID } from "node:crypto";
 import express, { type NextFunction, type Request, type Response } from "express";
 import helmet from "helmet";
 import { ZodError, z } from "zod";
+import { createRateLimiter } from "./rate-limiter";
 import {
   type AuditTrailStore,
   type ExternalAttachmentFetcher,
   type OperationsSummary,
   AnamnesisDomainError,
-  type AnamnesisCase,
   type AnamnesisStore,
   addArtifact,
   buildOperationsSummary,
@@ -192,7 +192,6 @@ export function createApp({ store, auditStore, isShuttingDown, authMiddleware, r
   }
 
   if (rateLimitRpm && rateLimitRpm > 0) {
-    const { createRateLimiter } = require("./rate-limiter") as typeof import("./rate-limiter");
     app.use(
       createRateLimiter({
         windowMs: 60_000,

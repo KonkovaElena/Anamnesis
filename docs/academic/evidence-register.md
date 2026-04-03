@@ -22,6 +22,9 @@ tags: [anamnesis, healthcare, evidence, academic]
 - `docs/roadmap-and-validation.md`
 - `docs/claim-boundary.md`
 - `docs/architecture/overview.md`
+- `docs/api-scope.md`
+- `docs/interop/README.md`
+- `docs/traceability-matrix.md`
 - `docs/regulatory/positioning.md`
 
 ## Provenance Boundary
@@ -91,3 +94,5 @@ The broader parent-platform concepts such as multi-agent orchestration, evidence
 The landscape for structured clinician-in-the-loop intake systems remains relatively sparse. Anamnesis should keep competing on explicit scope discipline, typed workflow boundaries, and verification rather than on inflated AI claims.
 
 No standalone runtime claim should be widened from this file alone.
+
+Use `docs/traceability-matrix.md` as the direct claim-to-code-and-test companion when preparing public, diligence, or interoperability-facing language.
