@@ -12,12 +12,18 @@ The format is based on Keep a Changelog and the project uses Semantic Versioning
 - `.github/CODEOWNERS` for review routing and ruleset-based protection;
 - `.github/dependabot.yml` for scheduled npm and GitHub Actions dependency maintenance.
 - `.github/workflows/codeql.yml` for repository-managed CodeQL scanning on `main` and pull requests.
+- `.github/workflows/dependency-review.yml` for pull-request dependency review enforcement;
+- `eslint.config.mjs`, `npm run lint`, and `npm run test:coverage` as part of the standalone publication verification baseline;
+- `openapi.yaml`, `GOVERNANCE.md`, `SUPPORT.md`, and the expanded `docs/interop`, `docs/security`, `docs/traceability-matrix`, and `docs/investor` publication surfaces;
+- `docs/investor/GITHUB_POST_PUSH_CHECK_2026_04_03.md` to record live GitHub post-push state, current workflow registration, and admin-bound follow-up actions.
 
 ### Changed
 
 - GitHub publishing guidance now covers code owner protection, repository citation, and archival DOI backfill;
 - CI push triggers now target the canonical `main` branch only after the standalone branch rename;
-- issue intake now exposes private security-reporting guidance directly from the GitHub issue chooser.
+- issue intake now exposes private security-reporting guidance directly from the GitHub issue chooser;
+- `validate:public-export` now runs lint, coverage, build, and production dependency audit checks;
+- the live GitHub audit shows `CI` and `CodeQL` running successfully on the public repository, while `dependency-review` is currently blocked by repository-side dependency graph enablement rather than a broken workflow file.
 
 ## [1.0.0] - 2026-04-01
 

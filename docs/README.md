@@ -25,6 +25,7 @@ This page routes the active documentation surfaces for Anamnesis.
 ## Investor And Publication Pack
 
 - [investor/README.md](investor/README.md)
+- [investor/GITHUB_POST_PUSH_CHECK_2026_04_03.md](investor/GITHUB_POST_PUSH_CHECK_2026_04_03.md)
 - [../SUPPORT.md](../SUPPORT.md)
 - [../GOVERNANCE.md](../GOVERNANCE.md)
 - [../PUBLISHING.md](../PUBLISHING.md)
