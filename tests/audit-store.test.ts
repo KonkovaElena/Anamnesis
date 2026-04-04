@@ -123,6 +123,8 @@ test("SqliteAuditTrailStore lists audit events by correlation id across cases", 
 
     const events = await store.listByCorrelationId("corr_shared");
     assert.deepStrictEqual(events.map((event) => event.caseId), ["case-1", "case-2"]);
+    assert.deepStrictEqual(events.map((event) => event.correlationId), ["corr_shared", "corr_shared"]);
+    assert.ok(events.every((event) => event.schemaVersion === 1));
     assert.ok(events.every((event) => event.auditId === event.eventId));
   } finally {
     store?.close();
