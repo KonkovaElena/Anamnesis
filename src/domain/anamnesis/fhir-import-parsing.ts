@@ -48,6 +48,44 @@ interface BundleDocumentReferenceAttachment {
   creation?: string;
 }
 
+function assertDocumentBundleEnvelope(
+  resource: Record<string, unknown>,
+  entries: unknown[],
+): void {
+  const firstEntry = entries[0];
+  if (
+    !isRecord(firstEntry)
+    || !isRecord(firstEntry.resource)
+    || readOptionalString(firstEntry.resource.resourceType) !== "Composition"
+  ) {
+    throw new AnamnesisDomainError(
+      "fhir_import_bundle_document_composition_required",
+      400,
+      "FHIR document Bundle must provide a Composition as the first entry in this slice.",
+    );
+  }
+
+  if (
+    !isRecord(resource.identifier)
+    || !readOptionalString(resource.identifier.system)
+    || !readOptionalString(resource.identifier.value)
+  ) {
+    throw new AnamnesisDomainError(
+      "fhir_import_bundle_document_identifier_required",
+      400,
+      "FHIR document Bundle must include identifier.system and identifier.value in this slice.",
+    );
+  }
+
+  if (!readOptionalString(resource.timestamp)) {
+    throw new AnamnesisDomainError(
+      "fhir_import_bundle_document_timestamp_required",
+      400,
+      "FHIR document Bundle must include a timestamp in this slice.",
+    );
+  }
+}
+
 function parseDocumentReferenceImport(input: FhirImportInput): ParsedFhirImport {
   const content = input.resource.content;
   if (!Array.isArray(content) || content.length === 0) {
@@ -270,6 +308,10 @@ export async function parseFhirBundle(
       400,
       "FHIR Bundle import requires at least one entry resource in this slice.",
     );
+  }
+
+  if (bundleType === "document") {
+    assertDocumentBundleEnvelope(input.resource, entries);
   }
 
   const parsedEntries: ParsedFhirImport[] = [];

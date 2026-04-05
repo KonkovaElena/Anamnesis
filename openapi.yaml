@@ -17,7 +17,7 @@ info:
 
     Interoperability boundary:
     - supported inline FHIR resource types: `Binary`, `DocumentReference`;
-    - supported bundle types: `document`, `collection`;
+    - supported bundle types: `collection`, plus `document` when the bundle carries the standard document envelope for this slice (`Composition` first entry, `identifier.system`, `identifier.value`, and `timestamp`);
     - supported textual content: `text/plain`, `text/markdown`;
     - no CRUD/search/history/transaction `$operation` FHIR REST semantics are claimed here.
   contact:
@@ -245,7 +245,8 @@ paths:
       operationId: importFhirBundle
       description: |
         Import a `document` or `collection` bundle containing supported `Binary` and `DocumentReference`
-        entries. External attachment fetch remains opt-in and heavily bounded.
+        entries. `document` bundles must include a `Composition` first entry plus `identifier.system`,
+        `identifier.value`, and `timestamp`. External attachment fetch remains opt-in and heavily bounded.
       requestBody:
         required: true
         content:

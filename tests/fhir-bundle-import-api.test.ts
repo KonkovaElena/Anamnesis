@@ -87,6 +87,8 @@ test("POST /fhir-bundle-imports creates multiple artifacts, stales packets, and 
         resource: {
           resourceType: "Bundle",
           type: "document",
+          identifier: { system: "urn:ietf:rfc:3986", value: "urn:uuid:document-bundle-1" },
+          timestamp: "2026-03-30T12:00:00Z",
           entry: [
             {
               resource: {
@@ -200,6 +202,56 @@ test("POST /fhir-bundle-imports rejects unsupported bundle types", async () => {
 
     assert.equal(response.status, 400);
     assert.equal(response.body.code, "fhir_import_bundle_type_unsupported");
+  });
+});
+
+test("POST /fhir-bundle-imports rejects document bundles without the required document envelope", async () => {
+  await withServer(async (baseUrl) => {
+    const caseResponse = await jsonRequest<{ case: { caseId: string } }>(baseUrl, "/api/cases", {
+      method: "POST",
+      body: {
+        intake: {
+          chiefConcern: "Fatigue",
+          symptomSummary: "Persistent fatigue for one week.",
+          historySummary: "No recent illness.",
+          questionsForClinician: [],
+        },
+      },
+    });
+    const caseId = caseResponse.body.case.caseId;
+
+    const response = await jsonRequest<{ code: string }>(
+      baseUrl,
+      `/api/cases/${caseId}/fhir-bundle-imports`,
+      {
+        method: "POST",
+        body: {
+          resource: {
+            resourceType: "Bundle",
+            type: "document",
+            entry: [
+              {
+                resource: {
+                  resourceType: "DocumentReference",
+                  status: "current",
+                  content: [
+                    {
+                      attachment: {
+                        contentType: "text/plain",
+                        data: Buffer.from("Bundle body", "utf8").toString("base64"),
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      },
+    );
+
+    assert.equal(response.status, 400);
+    assert.equal(response.body.code, "fhir_import_bundle_document_composition_required");
   });
 });
 

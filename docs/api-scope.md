@@ -43,7 +43,7 @@ This is an organizational workflow API, not a diagnostic or treatment API.
 | `/api/cases/{caseId}/artifacts/{artifactId}` | `DELETE` | Remove a source artifact and stale any active packet drafts. |
 | `/api/cases/{caseId}/document-ingestions` | `POST` | Normalize bounded text into a source artifact plus ingestion metadata. |
 | `/api/cases/{caseId}/fhir-imports` | `POST` | Import one supported inline FHIR resource into a source artifact. |
-| `/api/cases/{caseId}/fhir-bundle-imports` | `POST` | Import one supported FHIR bundle into one or more source artifacts. |
+| `/api/cases/{caseId}/fhir-bundle-imports` | `POST` | Import one supported FHIR bundle into one or more source artifacts. `document` bundles must include the standard document envelope for this slice. |
 | `/api/cases/{caseId}/physician-packets` | `POST` | Draft a physician packet from the current case state. |
 | `/api/cases/{caseId}/physician-packets` | `GET` | List packet drafts for a case with `meta.totalPackets`. |
 | `/api/cases/{caseId}/physician-packets/{packetId}/reviews` | `POST` | Append a clinician review entry. |
@@ -90,6 +90,7 @@ Document and FHIR import responses now expose explicit profile metadata so clien
 - inline `Binary` resources with `text/plain` or `text/markdown` payloads;
 - inline `DocumentReference` attachments with `text/plain` or `text/markdown` payloads;
 - `Bundle` resources of type `document` or `collection` containing supported `Binary` and `DocumentReference` entries;
+- `document` bundles only when the first entry is `Composition` and the bundle also includes `identifier.system`, `identifier.value`, and `timestamp`;
 - explicit, request-gated dereference of `DocumentReference.content.attachment.url` during bundle import when `allowExternalAttachmentFetch=true`.
 
 ### Not Supported

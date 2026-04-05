@@ -31,7 +31,7 @@ It implements a narrow workflow baseline that helps a user organize case intake,
 - source artifact registration with future-date rejection;
 - bounded text document ingestion (`text/plain`, `text/markdown`) into source artifacts;
 - bounded FHIR-compatible import seams for inline `Binary` and `DocumentReference` resources carrying `text/plain` or `text/markdown` payloads;
-- bounded FHIR Bundle import seam for `document` and `collection` bundles;
+- bounded FHIR Bundle import seam for `document` and `collection` bundles, with `document` bundles requiring the standard document envelope (`Composition` first entry, `identifier.system`, `identifier.value`, and `timestamp`);
 - explicit, gated `attachment.url` dereference over `https` for bounded text bundle attachments that resolve only to public addresses, with optional host allowlisting;
 - artifact and case deletion;
 - physician packet draft generation;
@@ -72,7 +72,7 @@ Default runtime port: `4020`
 
 ## Deployment Notes
 
-- `/metrics` is treated as an operational endpoint. When `API_KEY` is configured, auth bypass is limited to `/healthz` and `/readyz`, so monitoring access should either send the bearer token or sit behind separate network controls.
+- `/metrics` is treated as an operational endpoint. It remains unauthenticated like `/healthz` and `/readyz`, so monitoring access should sit behind separate network controls when exposure beyond the local trust boundary is possible.
 - If you enable `RATE_LIMIT_RPM` behind a reverse proxy or load balancer, configure Express proxy trust for the deployment topology before relying on `request.ip` for enforcement.
 
 ## Validation

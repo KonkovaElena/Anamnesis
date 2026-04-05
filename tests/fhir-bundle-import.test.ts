@@ -96,6 +96,8 @@ test("ingestFhirBundle imports supported document bundle entries into bounded ar
     resource: {
       resourceType: "Bundle",
       type: "document",
+      identifier: { system: "urn:ietf:rfc:3986", value: "urn:uuid:document-bundle-1" },
+      timestamp: "2026-03-30T12:00:00Z",
       entry: [
         {
           resource: {
@@ -179,6 +181,137 @@ test("ingestFhirBundle rejects unsupported bundle types", async () => {
     (error: unknown) => {
       assert.ok(error instanceof AnamnesisDomainError);
       assert.equal(error.code, "fhir_import_bundle_type_unsupported");
+      return true;
+    },
+  );
+});
+
+test("ingestFhirBundle rejects document bundles without a Composition as the first entry", async () => {
+  const ingestFhirBundle = await loadIngestFhirBundle();
+  const record = createCase({
+    intake: {
+      chiefConcern: "Fatigue",
+      symptomSummary: "Persistent fatigue for one week.",
+      historySummary: "No recent illness.",
+      questionsForClinician: [],
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      ingestFhirBundle(record, {
+        resource: {
+          resourceType: "Bundle",
+          type: "document",
+          identifier: { system: "urn:ietf:rfc:3986", value: "urn:uuid:bundle-1" },
+          timestamp: "2026-04-05T09:00:00Z",
+          entry: [
+            {
+              resource: {
+                resourceType: "DocumentReference",
+                status: "current",
+                content: [
+                  {
+                    attachment: {
+                      contentType: "text/plain",
+                      data: Buffer.from("Bundle body", "utf8").toString("base64"),
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      }),
+    (error: unknown) => {
+      assert.ok(error instanceof AnamnesisDomainError);
+      assert.equal(error.code, "fhir_import_bundle_document_composition_required");
+      return true;
+    },
+  );
+});
+
+test("ingestFhirBundle rejects document bundles without identifier system and value", async () => {
+  const ingestFhirBundle = await loadIngestFhirBundle();
+  const record = createCase({
+    intake: {
+      chiefConcern: "Fatigue",
+      symptomSummary: "Persistent fatigue for one week.",
+      historySummary: "No recent illness.",
+      questionsForClinician: [],
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      ingestFhirBundle(record, {
+        resource: {
+          resourceType: "Bundle",
+          type: "document",
+          timestamp: "2026-04-05T09:00:00Z",
+          entry: [
+            {
+              resource: {
+                resourceType: "Composition",
+                status: "final",
+              },
+            },
+            {
+              resource: {
+                resourceType: "Binary",
+                contentType: "text/plain",
+                data: Buffer.from("Bundle body", "utf8").toString("base64"),
+              },
+            },
+          ],
+        },
+      }),
+    (error: unknown) => {
+      assert.ok(error instanceof AnamnesisDomainError);
+      assert.equal(error.code, "fhir_import_bundle_document_identifier_required");
+      return true;
+    },
+  );
+});
+
+test("ingestFhirBundle rejects document bundles without timestamp", async () => {
+  const ingestFhirBundle = await loadIngestFhirBundle();
+  const record = createCase({
+    intake: {
+      chiefConcern: "Fatigue",
+      symptomSummary: "Persistent fatigue for one week.",
+      historySummary: "No recent illness.",
+      questionsForClinician: [],
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      ingestFhirBundle(record, {
+        resource: {
+          resourceType: "Bundle",
+          type: "document",
+          identifier: { system: "urn:ietf:rfc:3986", value: "urn:uuid:bundle-1" },
+          entry: [
+            {
+              resource: {
+                resourceType: "Composition",
+                status: "final",
+              },
+            },
+            {
+              resource: {
+                resourceType: "Binary",
+                contentType: "text/plain",
+                data: Buffer.from("Bundle body", "utf8").toString("base64"),
+              },
+            },
+          ],
+        },
+      }),
+    (error: unknown) => {
+      assert.ok(error instanceof AnamnesisDomainError);
+      assert.equal(error.code, "fhir_import_bundle_document_timestamp_required");
       return true;
     },
   );
