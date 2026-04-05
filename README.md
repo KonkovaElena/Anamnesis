@@ -1,19 +1,118 @@
 # Anamnesis
 
-Clinician-in-the-loop personal health control plane bootstrap for Anamnesis.
+Evidence-first clinician-in-the-loop workflow control plane for structured case intake, bounded document and FHIR ingestion, physician-packet drafting, explicit review and finalization, and append-only auditability.
 
-This repository is not an AI doctor.
+This repository is intentionally not an AI doctor, clinical decision engine, or general-purpose FHIR server. Its public scope is workflow support for clinician review, with claims kept narrower than the code, tests, and evidence currently support.
 
-It implements a narrow workflow baseline that helps a user organize case intake, supporting artifacts, and a physician-facing packet draft without claiming diagnosis, treatment, or prescription capability.
+## Why This Repository Exists
 
-## Public Repository Status
+Anamnesis is designed as a narrow standalone slice for healthcare-adjacent workflow software. The project favors verifiable scope, explicit interoperability boundaries, and auditable state transitions over speculative medical or AI claims. In practice, that means the repository optimizes for truthful workflow assistance rather than diagnosis, treatment, triage, prescription logic, or inflated clinical positioning.
 
-- The repository is self-contained and no longer depends on a parent-monorepo export workflow.
-- Claim-boundary, roadmap, evidence, and investor diligence materials live in dedicated local docs rather than migration notes.
-- The April 3, 2026 documentation refresh synchronizes the public docs set with the current codebase, current official standards references, and current research-derived controls.
-- Declared runtime dependencies currently track: Express `^5.2.1`, Helmet `^8.1.0`, Zod `^4.3.6`, better-sqlite3 `^12.8.0`, tsx `^4.21.0`, and TypeScript `^6.0.2`.
+## What Is Implemented Today
 
-## Stack (April 2026 Baseline)
+- structured case intake and case lifecycle APIs;
+- source artifact registration and removal with packet staleness tracking;
+- bounded text document ingestion for `text/plain` and `text/markdown`;
+- bounded FHIR-compatible import for inline `Binary` and `DocumentReference` resources carrying `text/plain` or `text/markdown` payloads;
+- bounded FHIR Bundle import for `document` and `collection` bundles, with `document` bundles requiring a `Composition` first entry plus `identifier.system`, `identifier.value`, and `timestamp`;
+- explicit, request-gated `attachment.url` dereference over `https` with public-target validation, redirect rejection, text-only response filtering, byte limits, and optional host allowlisting;
+- physician packet drafting from current case state;
+- explicit clinician review ledger (`approved`, `changes_requested`, `rejected`);
+- packet finalization only for clinician-approved, non-stale drafts;
+- append-only audit trail and operations summary;
+- Bearer-token authentication, rate limiting, security headers, and graceful shutdown;
+- durable SQLite persistence with AES-256-GCM encryption at rest.
+
+## What This Repository Explicitly Does Not Claim
+
+- medical diagnosis;
+- triage urgency scoring;
+- treatment or prescription recommendations;
+- clinical validation or regulatory clearance;
+- general-purpose FHIR REST server behavior;
+- SMART on FHIR authorization flows;
+- imaging, genomics, wearable ingestion, or OCR pipelines;
+- EHR replacement.
+
+## Architecture At A Glance
+
+Anamnesis adopts a reduced architectural kernel extracted from the broader MicroPhoenix platform, but only where the pattern improves clarity without inflating runtime complexity.
+
+| Layer | Responsibility in this slice |
+|---|---|
+| Core | IDs, correlation, audit-event envelope, normalization-profile primitives |
+| Domain | Case workflow, artifact model, bounded import parsing, physician packet and review rules |
+| Application | HTTP routes, request validation, auth, rate limiting, metrics, error mapping |
+| Infrastructure | SQLite stores, AES-256-GCM encryption, audit persistence, bounded external attachment fetch |
+| Runtime chain | `src/index.ts` -> `src/bootstrap.ts` -> `src/application/create-app.ts` |
+
+Key transfer principles from MicroPhoenix:
+
+- one explicit composition root and one runtime chain;
+- code, tests, docs, and evidence move together before a capability is promoted as real;
+- adapters and bounded seams come before heavier platform machinery;
+- public claims remain downstream of verified evidence, not upstream of ambition.
+
+## Interoperability Boundary
+
+FHIR support exists only as a bounded import seam into workflow artifacts. The repository does not expose generic FHIR CRUD, search, transactions, history, subscriptions, messaging, or `/metadata` capability discovery.
+
+Supported now:
+
+- inline `Binary` with `text/plain` or `text/markdown` payloads;
+- inline `DocumentReference.content.attachment.data` with `text/plain` or `text/markdown` payloads;
+- `Bundle.type=document` and `Bundle.type=collection` when entries remain inside the supported slice;
+- `document` bundles only when the bundle carries the standard document envelope used in this repository;
+- remote `attachment.url` dereference only through an explicit, opt-in, bounded, `https`-only path.
+
+## Security Posture
+
+The current security baseline is intentionally modest but explicit:
+
+- secure-by-default bearer authentication on application routes;
+- explicit development-only unauthenticated override, blocked in production;
+- per-IP sliding-window rate limiting;
+- Helmet-based header hardening;
+- encrypted durable case storage when `STORE_PATH` and `ENCRYPTION_KEY` are configured;
+- append-only audit history for write flows;
+- SSRF-aware remote attachment controls for the highest-risk interoperability path.
+
+Current non-claims remain important:
+
+- no RBAC or user-scoped identity model;
+- no cryptographically sealed audit log;
+- no documented key rotation or disaster-recovery runbook yet;
+- TLS is expected to be handled by deployment infrastructure, not by the Node process itself.
+
+## Evidence And Documentation Model
+
+This repository is organized so that public language can be checked against implementation and tests rather than inferred from aspiration.
+
+Primary authority surfaces:
+
+- [design.md](design.md)
+- [docs/design-refresh-2026-04-03.md](docs/design-refresh-2026-04-03.md)
+- [docs/architecture/overview.md](docs/architecture/overview.md)
+- [docs/api-scope.md](docs/api-scope.md)
+- [docs/claim-boundary.md](docs/claim-boundary.md)
+- [docs/interop/README.md](docs/interop/README.md)
+- [docs/traceability-matrix.md](docs/traceability-matrix.md)
+- [docs/security/posture-and-gaps.md](docs/security/posture-and-gaps.md)
+- [docs/academic/evidence-register.md](docs/academic/evidence-register.md)
+- [openapi.yaml](openapi.yaml)
+
+The shortest claim-to-code-to-test route is [docs/traceability-matrix.md](docs/traceability-matrix.md).
+
+## Positioning In The Adjacent OSS Landscape
+
+Adjacent open-source projects in this space tend to cluster around two patterns:
+
+- local-first intake assistants centered on patient-side data capture and printable summaries;
+- AI summarization MVPs centered on conservative note generation while disclaiming diagnosis and treatment.
+
+Anamnesis is positioned differently. It is a server-side, evidence-governed workflow control plane: narrower than a digital front door, less speculative than a generic medical AI demo, and more explicit about interoperability, auditability, and claim boundaries than many adjacent prototypes.
+
+## Technology Baseline (April 2026)
 
 | Technology | Version | Role |
 |---|---|---|
@@ -21,48 +120,17 @@ It implements a narrow workflow baseline that helps a user organize case intake,
 | TypeScript | `^6.0.2` | Type system and compiler |
 | Express | `^5.2.1` | HTTP framework |
 | Helmet | `^8.1.0` | Security headers |
-| Zod | `^4.3.6` | Input validation |
-| better-sqlite3 | `^12.8.0` | Durable SQLite persistence |
+| Zod | `^4.3.6` | Request validation and runtime schemas |
+| better-sqlite3 | `^12.8.0` | Durable persistence |
 | node:test | built-in | Test runner |
 
-## Current Scope
-
-- structured case intake;
-- source artifact registration with future-date rejection;
-- bounded text document ingestion (`text/plain`, `text/markdown`) into source artifacts;
-- bounded FHIR-compatible import seams for inline `Binary` and `DocumentReference` resources carrying `text/plain` or `text/markdown` payloads;
-- bounded FHIR Bundle import seam for `document` and `collection` bundles, with `document` bundles requiring the standard document envelope (`Composition` first entry, `identifier.system`, `identifier.value`, and `timestamp`);
-- explicit, gated `attachment.url` dereference over `https` for bounded text bundle attachments that resolve only to public addresses, with optional host allowlisting;
-- artifact and case deletion;
-- physician packet draft generation;
-- explicit clinician review ledger (`approved`, `changes_requested`, `rejected`);
-- physician packet finalization after clinician approval;
-- append-only per-case audit trail;
-- operations summary;
-- Bearer-token authentication (`API_KEY`);
-- per-IP sliding-window rate limiting (`RATE_LIMIT_RPM`);
-- security headers via Helmet;
-- graceful HTTP shutdown with connection draining;
-- durable SQLite persistence with AES-256-GCM encryption at rest;
-- `GET /healthz`, `GET /readyz`, and `GET /metrics`.
-
-## Non-Goals In This Slice
-
-- autonomous diagnosis or triage verdicts;
-- medication or treatment advice;
-- clinical validation claims;
-- imaging, genomics, or wearable processing pipelines;
-- general-purpose FHIR server behavior;
-- EHR replacement.
-
-## Quickstart
+## Quick Start
 
 Use `.env.example` as the baseline runtime contract.
 
 ```bash
 npm install
-npm test
-npm run build
+npm run validate:public-export
 npm run dev
 ```
 
@@ -70,20 +138,15 @@ Set either `API_KEY` or `ALLOW_INSECURE_DEV_AUTH=true` before starting the serve
 
 Default runtime port: `4020`
 
-## Deployment Notes
-
-- `/metrics` is treated as an operational endpoint. It remains unauthenticated like `/healthz` and `/readyz`, so monitoring access should sit behind separate network controls when exposure beyond the local trust boundary is possible.
-- If you enable `RATE_LIMIT_RPM` behind a reverse proxy or load balancer, configure Express proxy trust for the deployment topology before relying on `request.ip` for enforcement.
-
 ## Validation
 
-For a publication-grade local verification pass:
+Publication-grade local verification:
 
 ```bash
 npm run validate:public-export
 ```
 
-If you want the individual steps instead of the aggregate script:
+This expands to:
 
 ```bash
 npm run lint
@@ -92,28 +155,40 @@ npm run build
 npm run audit:prod
 ```
 
-## Environment Variables
+Operational probes:
+
+- `GET /healthz`
+- `GET /readyz`
+- `GET /metrics`
+
+## Deployment Notes
+
+- `/metrics` remains unauthenticated like `/healthz` and `/readyz`, so monitoring access should sit behind separate network controls when exposure beyond the local trust boundary is possible.
+- If you enable `RATE_LIMIT_RPM` behind a reverse proxy or load balancer, configure Express proxy trust for the deployment topology before relying on `request.ip` for enforcement.
+
+## Environment Contract
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `PORT` | No | `4020` | HTTP listen port |
-| `API_KEY` | Yes unless explicit local-dev override is enabled | — | Bearer token for API authentication on application endpoints. |
-| `ALLOW_INSECURE_DEV_AUTH` | No | `false` | Explicit local-development override that allows startup without `API_KEY`. Rejected when `NODE_ENV=production`. |
-| `RATE_LIMIT_RPM` | No | `0` | Maximum requests per minute per IP. Health and readiness probes are exempt. |
-| `EXTERNAL_ATTACHMENT_HOST_ALLOWLIST` | No | — | Optional comma-separated hostname allowlist for external FHIR bundle attachment fetches. When set, only listed hosts are eligible in addition to the public-address checks. |
-| `STORE_PATH` | No | — | Path to SQLite database file. When unset, data is stored in memory only. |
-| `ENCRYPTION_KEY` | When `STORE_PATH` is set | — | 64-character hex string used for AES-256-GCM encryption at rest. |
+| `API_KEY` | Yes unless explicit local-dev override is enabled | — | Bearer token for API authentication on application endpoints |
+| `ALLOW_INSECURE_DEV_AUTH` | No | `false` | Explicit local-development override that allows startup without `API_KEY`; rejected when `NODE_ENV=production` |
+| `RATE_LIMIT_RPM` | No | `0` | Maximum requests per minute per IP; health and readiness probes are exempt |
+| `EXTERNAL_ATTACHMENT_HOST_ALLOWLIST` | No | — | Optional comma-separated hostname allowlist for external FHIR bundle attachment fetches |
+| `STORE_PATH` | No | — | Path to SQLite database file; when unset, data is stored in memory only |
+| `ENCRYPTION_KEY` | When `STORE_PATH` is set | — | 64-character hex string used for AES-256-GCM encryption at rest |
 
 ## API Surface
 
 - `POST /api/cases`
 - `GET /api/cases`
 - `GET /api/cases/:caseId`
+- `DELETE /api/cases/:caseId`
 - `POST /api/cases/:caseId/artifacts`
+- `DELETE /api/cases/:caseId/artifacts/:artifactId`
 - `POST /api/cases/:caseId/document-ingestions`
 - `POST /api/cases/:caseId/fhir-imports`
 - `POST /api/cases/:caseId/fhir-bundle-imports`
-- `DELETE /api/cases/:caseId/artifacts/:artifactId`
 - `POST /api/cases/:caseId/physician-packets`
 - `GET /api/cases/:caseId/physician-packets`
 - `POST /api/cases/:caseId/physician-packets/:packetId/reviews`
@@ -125,38 +200,32 @@ npm run audit:prod
 - `GET /readyz`
 - `GET /metrics`
 
-OpenAPI description: [openapi.yaml](openapi.yaml)
+Machine-readable contract: [openapi.yaml](openapi.yaml)
 
-## Documentation
+## Repository Trust Surfaces
 
-- [design.md](design.md)
-- [docs/README.md](docs/README.md)
-- [docs/design-refresh-2026-04-03.md](docs/design-refresh-2026-04-03.md)
-- [docs/api-scope.md](docs/api-scope.md)
-- [docs/architecture/overview.md](docs/architecture/overview.md)
+- [README.md](README.md)
+- [openapi.yaml](openapi.yaml)
 - [docs/claim-boundary.md](docs/claim-boundary.md)
-- [docs/interop/README.md](docs/interop/README.md)
-- [docs/roadmap-and-validation.md](docs/roadmap-and-validation.md)
 - [docs/traceability-matrix.md](docs/traceability-matrix.md)
 - [docs/security/posture-and-gaps.md](docs/security/posture-and-gaps.md)
-- [docs/academic/evidence-register.md](docs/academic/evidence-register.md)
-- [docs/regulatory/positioning.md](docs/regulatory/positioning.md)
-- [docs/investor/README.md](docs/investor/README.md)
+- [CONTRIBUTING.md](CONTRIBUTING.md)
+- [SECURITY.md](SECURITY.md)
+- [SUPPORT.md](SUPPORT.md)
+- [GOVERNANCE.md](GOVERNANCE.md)
+- [CITATION.cff](CITATION.cff)
+- [CHANGELOG.md](CHANGELOG.md)
 
 ## Governance And Support
 
 - [GOVERNANCE.md](GOVERNANCE.md) defines maintainer rules, evidence requirements, and change-control boundaries.
 - [SUPPORT.md](SUPPORT.md) explains support routing and security-reporting boundaries.
-- [PUBLISHING.md](PUBLISHING.md) is the public GitHub release checklist.
+- [PUBLISHING.md](PUBLISHING.md) is the public GitHub release checklist and repository-metadata guide.
 - [CONTRIBUTING.md](CONTRIBUTING.md) covers contribution flow.
 - [SECURITY.md](SECURITY.md) covers security reporting.
 - [CITATION.cff](CITATION.cff) provides machine-readable citation metadata.
 - `.github/workflows/ci.yml` and `.github/workflows/dependency-review.yml` define the current GitHub validation baseline.
 
-## Claim Boundary
+## License
 
-This repository is an organizational workflow system for clinician review.
-
-The generated physician packet is a draft summary, not a diagnosis, treatment plan, prescription, or clinical sign-off.
-
-Future AI or local-model experiments should remain behind explicit adapter seams, evaluation packs, and updated evidence gates before they affect public scope.
+MIT. See [LICENSE](LICENSE).

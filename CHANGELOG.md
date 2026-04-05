@@ -25,6 +25,7 @@ The format is based on Keep a Changelog and the project uses Semantic Versioning
 - `validate:public-export` now runs lint, coverage, build, and production dependency audit checks;
 - FHIR `document` bundle import now enforces the document-envelope fields already required by this slice: first-entry `Composition`, `identifier.system`, `identifier.value`, and `timestamp`; clients relying on the previously looser acceptance path must update their payloads;
 - README deployment notes now correctly describe `/metrics` as unauthenticated, matching the live runtime and API contract surfaces;
+- README, package metadata, and publishing guidance now present the repository as an evidence-first clinician-in-the-loop workflow control plane, with an explicit GitHub topic set aligned to current scope and architecture;
 - the live GitHub audit shows `CI` and `CodeQL` running successfully on the public repository, while `dependency-review` is currently blocked by repository-side dependency graph enablement rather than a broken workflow file.
 
 ## [1.0.0] - 2026-04-01

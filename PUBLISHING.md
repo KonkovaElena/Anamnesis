@@ -68,6 +68,20 @@ Recommended settings before public announcement:
 - add repository description, website URL, and topics;
 - review whether Discussions should be enabled for community support.
 
+Recommended repository description:
+
+`Evidence-first clinician-in-the-loop workflow control plane with bounded FHIR ingestion, auditable packet review, and explicit claim boundaries.`
+
+Recommended website URL:
+
+`https://github.com/KonkovaElena/Anamnesis#readme`
+
+Recommended GitHub topics:
+
+`anamnesis clinician-in-the-loop clinical-workflow healthcare health-informatics medical-informatics patient-intake case-management fhir interoperability typescript express sqlite audit-trail openapi`
+
+GitHub topic constraints confirmed from GitHub Docs (April 2026): use lowercase letters, numbers, and hyphens; keep each topic at 50 characters or less; and keep the repository at 20 topics or fewer.
+
 ## 7. Validate Repository Surfaces
 
 After push, confirm the public repository surfaces resolve correctly:

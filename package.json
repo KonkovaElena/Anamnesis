@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "author": "Anamnesis contributors",
-  "description": "Clinician-in-the-loop personal health control plane bootstrap",
+  "description": "Evidence-first clinician-in-the-loop workflow control plane with bounded FHIR ingestion and auditable packet review",
   "homepage": "https://github.com/KonkovaElena/Anamnesis#readme",
   "bugs": {
     "url": "https://github.com/KonkovaElena/Anamnesis/issues"
@@ -40,11 +40,21 @@
     "validate:public-export": "npm run lint && npm run test:coverage && npm run build && npm run audit:prod"
   },
   "keywords": [
-    "healthcare",
-    "clinician-in-the-loop",
     "anamnesis",
+    "healthcare",
+    "clinical-workflow",
+    "clinician-in-the-loop",
+    "medical-informatics",
+    "health-informatics",
+    "patient-intake",
+    "case-management",
+    "fhir",
+    "interoperability",
+    "audit-trail",
     "typescript",
-    "express"
+    "express",
+    "sqlite",
+    "openapi"
   ],
   "dependencies": {
     "better-sqlite3": "^12.8.0",
