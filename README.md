@@ -13,7 +13,7 @@ Anamnesis is designed as a narrow standalone slice for healthcare-adjacent workf
 - structured case intake and case lifecycle APIs;
 - workflow-family-aware case creation for general intake, MRI second-opinion, and mRNA board-review paths;
 - source artifact registration and removal with packet staleness tracking;
-- derived artifact metadata carry-through for lineage-aware evidence bundles;
+- derived artifact metadata carry-through plus a read-only evidence-lineage graph route for lineage-aware evidence bundles;
 - molecular sample registration for case-scoped review workflows;
 - imaging study-context attachment and QC-summary recording for second-opinion workflows;
 - bounded text document ingestion for `text/plain` and `text/markdown`;
@@ -190,6 +190,7 @@ Operational probes:
 - `DELETE /api/cases/:caseId`
 - `POST /api/cases/:caseId/artifacts`
 - `DELETE /api/cases/:caseId/artifacts/:artifactId`
+- `GET /api/cases/:caseId/evidence-lineage`
 - `POST /api/cases/:caseId/samples`
 - `POST /api/cases/:caseId/study-context`
 - `POST /api/cases/:caseId/qc-summary`

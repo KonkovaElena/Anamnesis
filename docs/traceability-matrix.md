@@ -1,7 +1,7 @@
 ---
 title: "Anamnesis Traceability Matrix"
 status: active
-version: "1.1.0"
+version: "1.1.1"
 last_updated: "2026-04-05"
 tags: [anamnesis, traceability, evidence, reference]
 ---
@@ -21,7 +21,7 @@ This page is the shortest route for checking whether a product or diligence stat
 | Structured case intake | The system can create, list, retrieve, and delete workflow cases with typed intake data. | `src/application/create-app.ts`, `src/domain/anamnesis.ts` | `tests/api.test.ts`, `tests/sqlite-store.test.ts` |
 | Workflow-family-aware case creation | The system can create cases for general intake, MRI second-opinion, and mRNA board-review workflows. | `src/application/create-app/case-schemas.ts`, `src/application/create-app/case-routes.ts`, `src/domain/anamnesis/case-workflow.ts` | `tests/extraction-api.test.ts`, `tests/extraction-foundation.test.ts` |
 | Source artifact management | The system can register and remove source artifacts and keep packet state synchronized. | `src/application/create-app.ts`, `src/domain/anamnesis.ts` | `tests/api.test.ts`, `tests/extraction-api.test.ts` |
-| Derived artifact lineage | The system preserves derived-artifact metadata and parent-child lineage through the public artifact route and packet rendering. | `src/application/create-app/case-schemas.ts`, `src/domain/anamnesis/case-workflow.ts`, `src/domain/anamnesis/evidence-lineage.ts`, `src/domain/anamnesis/packet-workflow.ts` | `tests/extraction-api.test.ts`, `tests/extraction-foundation.test.ts` |
+| Derived artifact lineage | The system preserves derived-artifact metadata and parent-child lineage through the public artifact route, a dedicated read-only lineage endpoint, and packet rendering. | `src/application/create-app/case-routes.ts`, `src/application/create-app/case-schemas.ts`, `src/domain/anamnesis/case-workflow.ts`, `src/domain/anamnesis/evidence-lineage.ts`, `src/domain/anamnesis/packet-workflow.ts` | `tests/extraction-api.test.ts`, `tests/extraction-foundation.test.ts` |
 | Molecular sample registration | The system can register case-scoped molecular samples and surface them in physician packet drafts. | `src/application/create-app/case-schemas.ts`, `src/application/create-app/case-routes.ts`, `src/domain/anamnesis/case-workflow.ts`, `src/domain/anamnesis/packet-workflow.ts` | `tests/extraction-api.test.ts`, `tests/extraction-foundation.test.ts` |
 | Imaging study context and QC | The system can attach imaging study context, record QC summaries, and surface both in physician packet drafts. | `src/application/create-app/case-schemas.ts`, `src/application/create-app/case-routes.ts`, `src/domain/anamnesis/case-workflow.ts`, `src/domain/anamnesis/specialty-context.ts`, `src/domain/anamnesis/packet-workflow.ts` | `tests/extraction-api.test.ts`, `tests/extraction-foundation.test.ts` |
 | Bounded text document ingestion | The system can normalize bounded plain-text and markdown inputs into workflow artifacts. | `src/application/create-app.ts`, `src/domain/anamnesis.ts` | `tests/document-ingestion-api.test.ts`, `tests/document-ingestion.test.ts` |

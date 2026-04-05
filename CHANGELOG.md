@@ -10,6 +10,7 @@ The format is based on Keep a Changelog and the project uses Semantic Versioning
 
 - workflow-family-aware case creation and case-scoped extraction routes for molecular samples, imaging study context, and QC summaries;
 - public artifact-route support for derived-artifact metadata and evidence-lineage-aware packet rendering;
+- read-only `GET /api/cases/:caseId/evidence-lineage` for producer-consumer artifact graphs and artifact summary metadata;
 - `CITATION.cff` for GitHub-native citation rendering and later DOI backfill;
 - `.github/CODEOWNERS` for review routing and ruleset-based protection;
 - `.github/dependabot.yml` for scheduled npm and GitHub Actions dependency maintenance.

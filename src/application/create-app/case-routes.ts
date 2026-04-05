@@ -2,6 +2,7 @@ import type { Express, RequestHandler } from "express";
 import {
   addArtifact,
   attachStudyContext,
+  buildArtifactEvidenceLineage,
   createCase,
   recordQcSummary,
   registerSample,
@@ -63,6 +64,32 @@ export function registerCaseRoutes(
     }
 
     response.json({ case: record });
+  });
+
+  app.get("/api/cases/:caseId/evidence-lineage", async (request, response) => {
+    const record = await loadCaseOrRespondNotFound(store, response, readRouteParam(request.params.caseId));
+    if (!record) {
+      return;
+    }
+
+    const lineage = buildArtifactEvidenceLineage(record.artifacts);
+    response.json({
+      lineage,
+      artifacts: record.artifacts.map((artifact) => ({
+        artifactId: artifact.artifactId,
+        artifactType: artifact.artifactType,
+        artifactClass: artifact.artifactClass,
+        semanticType: artifact.semanticType,
+        title: artifact.title,
+        summary: artifact.summary,
+        derivedFromArtifactIds: artifact.derivedFromArtifactIds,
+        provenance: artifact.provenance,
+      })),
+      meta: {
+        artifactCount: record.artifacts.length,
+        edgeCount: lineage.edges.length,
+      },
+    });
   });
 
   app.post("/api/cases/:caseId/samples", parseJson, async (request, response) => {

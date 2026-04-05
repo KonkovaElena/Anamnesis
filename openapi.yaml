@@ -37,6 +37,8 @@ tags:
     description: Case creation, retrieval, listing, and deletion.
   - name: Artifacts
     description: Source artifact registration and removal.
+  - name: Lineage
+    description: Read-only evidence lineage graph retrieval for case artifacts.
   - name: Extraction
     description: Workflow enrichment for samples, imaging study context, and QC summaries.
   - name: Ingestion
@@ -124,6 +126,27 @@ paths:
       responses:
         '204':
           description: Case deleted.
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+  /api/cases/{caseId}/evidence-lineage:
+    parameters:
+      - $ref: '#/components/parameters/CaseId'
+    get:
+      tags: [Lineage]
+      summary: Get evidence lineage graph
+      operationId: getEvidenceLineage
+      description: Return a read-only producer-to-consumer artifact graph plus artifact summary metadata for one case.
+      responses:
+        '200':
+          description: Evidence lineage graph returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvidenceLineageResponse'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '404':
@@ -763,6 +786,85 @@ components:
         createdAt:
           type: string
           format: date-time
+    EvidenceLineageEdge:
+      type: object
+      additionalProperties: false
+      required: [producerArtifactId, consumerArtifactId]
+      properties:
+        producerArtifactId:
+          type: string
+          format: uuid
+        consumerArtifactId:
+          type: string
+          format: uuid
+    EvidenceLineageGraph:
+      type: object
+      additionalProperties: false
+      required: [edges, roots, terminal]
+      properties:
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/EvidenceLineageEdge'
+        roots:
+          type: array
+          items:
+            type: string
+            format: uuid
+        terminal:
+          type: array
+          items:
+            type: string
+            format: uuid
+    EvidenceLineageArtifactSummary:
+      type: object
+      additionalProperties: false
+      required: [artifactId, artifactType, title, summary]
+      properties:
+        artifactId:
+          type: string
+          format: uuid
+        artifactType:
+          $ref: '#/components/schemas/ArtifactType'
+        artifactClass:
+          $ref: '#/components/schemas/ArtifactClass'
+        semanticType:
+          $ref: '#/components/schemas/SourceArtifactSemanticType'
+        title:
+          type: string
+        summary:
+          type: string
+        derivedFromArtifactIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        provenance:
+          type: string
+    EvidenceLineageMeta:
+      type: object
+      additionalProperties: false
+      required: [artifactCount, edgeCount]
+      properties:
+        artifactCount:
+          type: integer
+          minimum: 0
+        edgeCount:
+          type: integer
+          minimum: 0
+    EvidenceLineageResponse:
+      type: object
+      additionalProperties: false
+      required: [lineage, artifacts, meta]
+      properties:
+        lineage:
+          $ref: '#/components/schemas/EvidenceLineageGraph'
+        artifacts:
+          type: array
+          items:
+            $ref: '#/components/schemas/EvidenceLineageArtifactSummary'
+        meta:
+          $ref: '#/components/schemas/EvidenceLineageMeta'
     SampleRecord:
       type: object
       additionalProperties: false

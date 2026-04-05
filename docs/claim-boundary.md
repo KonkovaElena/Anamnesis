@@ -1,7 +1,7 @@
 ---
 title: "Anamnesis Claim Boundary"
 status: active
-version: "1.1.1"
+version: "1.1.2"
 last_updated: "2026-04-05"
 tags: [anamnesis, healthcare, claim-boundary, reference]
 ---
@@ -14,6 +14,7 @@ tags: [anamnesis, healthcare, claim-boundary, reference]
 - it creates workflow-family-aware cases for `GENERAL_INTAKE`, `MRI_SECOND_OPINION`, and `MRNA_BOARD_REVIEW`;
 - it registers source artifacts (with future-date rejection);
 - it preserves derived-artifact metadata and parent-child lineage when artifacts declare upstream artifact ids;
+- it exposes a read-only evidence-lineage graph for artifacts within an existing case;
 - it registers molecular samples on a case;
 - it attaches imaging study context and records QC summaries for imaging-review workflows;
 - it ingests bounded `text/plain` and `text/markdown` documents into source artifacts;

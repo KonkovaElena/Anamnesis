@@ -1,7 +1,7 @@
 ---
 title: "Anamnesis API Scope"
 status: active
-version: "1.2.1"
+version: "1.2.2"
 last_updated: "2026-04-05"
 tags: [anamnesis, api, reference]
 ---
@@ -41,6 +41,7 @@ This is an organizational workflow API, not a diagnostic or treatment API.
 | `/api/cases/{caseId}` | `DELETE` | Delete a case and append `case.deleted` to the audit trail. |
 | `/api/cases/{caseId}/artifacts` | `POST` | Register a source artifact and stale any active packet drafts. |
 | `/api/cases/{caseId}/artifacts/{artifactId}` | `DELETE` | Remove a source artifact and stale any active packet drafts. |
+| `/api/cases/{caseId}/evidence-lineage` | `GET` | Return a read-only artifact lineage graph plus artifact summary metadata for the case. |
 | `/api/cases/{caseId}/samples` | `POST` | Register a molecular sample for case-scoped review workflows. |
 | `/api/cases/{caseId}/study-context` | `POST` | Attach imaging study context and initialize pending QC state when needed. |
 | `/api/cases/{caseId}/qc-summary` | `POST` | Record a QC disposition for an attached imaging study context. |
@@ -78,6 +79,7 @@ Document and FHIR import responses now expose explicit profile metadata so clien
 - `causationId` is optional and reserved for future chained event flows.
 - ingestion-related audit events include normalization and import profile metadata inside `details`.
 - extraction-related audit events cover sample registration, study-context attachment, and QC-summary recording.
+- evidence-lineage reads are intentionally read-only and do not emit audit events in the current slice.
 
 ## Workflow Semantics
 
@@ -132,6 +134,7 @@ Bundle attachment dereference is allowed only when all of the following are true
 
 - `GET /api/cases/{caseId}/audit-events` is keyed to the append-only audit store, not to current case existence. Deleted cases can still return audit history.
 - `GET /api/cases/{caseId}/audit-events` now exposes correlation-aware event metadata suitable for tracing one request across case, artifact, review, and finalization transitions.
+- `GET /api/cases/{caseId}/evidence-lineage` is keyed to current case existence and returns `404 case_not_found` rather than an empty graph when the case is missing.
 - `GET /metrics` is unauthenticated, but unlike `/healthz` and `/readyz` it is still subject to rate limiting when `RATE_LIMIT_RPM` is enabled.
 - `POST /api/cases/{caseId}/physician-packets` requires at least one registered artifact and returns a `409` domain error otherwise.
 

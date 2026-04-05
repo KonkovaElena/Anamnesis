@@ -381,3 +381,82 @@ test("POST /api/cases/:caseId/artifacts accepts derived artifact metadata and pa
     assert.match(lineageSection?.content ?? "", /Derived evidence bundle/);
   });
 });
+
+test("GET /api/cases/:caseId/evidence-lineage returns graph structure and artifact metadata", async () => {
+  await withServer(async (baseUrl) => {
+    const caseResponse = await jsonRequest<{
+      case: { caseId: string };
+    }>(baseUrl, "/api/cases", {
+      method: "POST",
+      body: {
+        intake: {
+          chiefConcern: "Evidence lineage endpoint test",
+          symptomSummary: "Derived evidence should be visible through a dedicated read-only route.",
+          historySummary: "A review bundle was produced from a source artifact.",
+          questionsForClinician: [],
+        },
+      },
+    });
+
+    const caseId = caseResponse.body.case.caseId;
+
+    const sourceResponse = await jsonRequest<{
+      case: { artifacts: Array<{ artifactId: string }> };
+    }>(baseUrl, `/api/cases/${caseId}/artifacts`, {
+      method: "POST",
+      body: {
+        artifactType: "lab",
+        artifactClass: "SOURCE",
+        semanticType: "lab-panel",
+        title: "Primary lab panel",
+        summary: "Source evidence for a review bundle.",
+      },
+    });
+
+    const sourceArtifactId = sourceResponse.body.case.artifacts[0]?.artifactId;
+    assert.ok(sourceArtifactId);
+
+    await jsonRequest(baseUrl, `/api/cases/${caseId}/artifacts`, {
+      method: "POST",
+      body: {
+        artifactType: "report",
+        artifactClass: "DERIVED",
+        semanticType: "board-evidence-bundle",
+        derivedFromArtifactIds: [sourceArtifactId],
+        title: "Board review bundle",
+        summary: "Derived synthesis for multidisciplinary review.",
+      },
+    });
+
+    const lineageResponse = await jsonRequest<{
+      lineage: {
+        edges: Array<{ producerArtifactId: string; consumerArtifactId: string }>;
+        roots: string[];
+        terminal: string[];
+      };
+      artifacts: Array<{ artifactId: string; title: string; artifactClass?: string; semanticType?: string }>;
+      meta: { artifactCount: number; edgeCount: number };
+    }>(baseUrl, `/api/cases/${caseId}/evidence-lineage`);
+
+    assert.equal(lineageResponse.status, 200);
+    assert.equal(lineageResponse.body.meta.artifactCount, 2);
+    assert.equal(lineageResponse.body.meta.edgeCount, 1);
+    assert.equal(lineageResponse.body.lineage.edges.length, 1);
+    assert.deepStrictEqual(lineageResponse.body.lineage.roots, [sourceArtifactId]);
+    assert.equal(lineageResponse.body.artifacts[0]?.title, "Primary lab panel");
+    assert.equal(lineageResponse.body.artifacts[1]?.title, "Board review bundle");
+    assert.equal(lineageResponse.body.artifacts[1]?.artifactClass, "DERIVED");
+    assert.equal(lineageResponse.body.artifacts[1]?.semanticType, "board-evidence-bundle");
+  });
+});
+
+test("GET /api/cases/:caseId/evidence-lineage returns 404 for a missing case", async () => {
+  await withServer(async (baseUrl) => {
+    const response = await jsonRequest<{
+      code: string;
+    }>(baseUrl, "/api/cases/00000000-0000-0000-0000-000000000000/evidence-lineage");
+
+    assert.equal(response.status, 404);
+    assert.equal(response.body.code, "case_not_found");
+  });
+});
