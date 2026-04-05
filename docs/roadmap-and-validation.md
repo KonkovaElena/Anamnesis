@@ -1,8 +1,8 @@
 ---
 title: "Anamnesis Roadmap And Validation"
 status: active
-version: "1.1.0"
-last_updated: "2026-04-03"
+version: "1.1.1"
+last_updated: "2026-04-05"
 tags: [anamnesis, healthcare, roadmap, validation]
 ---
 
@@ -53,6 +53,13 @@ These are repository-operations tasks, not product-scope upgrades.
 2. More explicit interoperability narrowing through profile-aware tests before any broader FHIR claim.
 3. Close the GitHub-side dependency-graph and repository-protection gap recorded in the post-push audit.
 4. A future local-model experimentation rail behind an adapter boundary and offline evaluation only, not in the public write path.
+
+## Current Extraction Foundations
+
+- workflow-family-aware case creation now accepts `GENERAL_INTAKE`, `MRI_SECOND_OPINION`, and `MRNA_BOARD_REVIEW`;
+- case-scoped sample registration, imaging study-context attachment, and QC-summary recording are now available on the public HTTP surface;
+- artifact lineage metadata can now enter through the public artifact route and render as evidence-lineage sections in packet drafts;
+- these additions remain workflow metadata and packet-enrichment capabilities, not imaging pixel ingestion, genomics file transport, or autonomous clinical decision support.
 
 ## Completed In v1.0.0
 

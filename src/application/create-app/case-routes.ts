@@ -1,6 +1,19 @@
 import type { Express, RequestHandler } from "express";
-import { addArtifact, createCase, removeArtifact } from "../../domain/anamnesis";
-import { addArtifactSchema, createCaseSchema } from "./schemas";
+import {
+  addArtifact,
+  attachStudyContext,
+  createCase,
+  recordQcSummary,
+  registerSample,
+  removeArtifact,
+} from "../../domain/anamnesis";
+import {
+  addArtifactSchema,
+  attachStudyContextSchema,
+  createCaseSchema,
+  recordQcSummarySchema,
+  registerSampleSchema,
+} from "./schemas";
 import {
   appendAuditEvent,
   loadCaseOrRespondNotFound,
@@ -50,6 +63,89 @@ export function registerCaseRoutes(
     }
 
     response.json({ case: record });
+  });
+
+  app.post("/api/cases/:caseId/samples", parseJson, async (request, response) => {
+    const record = await loadCaseOrRespondNotFound(store, response, readRouteParam(request.params.caseId));
+    if (!record) {
+      return;
+    }
+
+    const input = registerSampleSchema.parse(request.body ?? {});
+    const nextCase = registerSample(record, input);
+    const sample = nextCase.samples.at(-1);
+    await store.saveCase(nextCase);
+    await appendAuditEvent(
+      auditStore,
+      response,
+      {
+        caseId: nextCase.caseId,
+        eventType: "sample.registered",
+        action: "register_sample",
+        occurredAt: sample?.registeredAt ?? nextCase.updatedAt,
+        details: {
+          sampleType: sample?.sampleType ?? input.sampleType,
+          assayType: sample?.assayType ?? input.assayType,
+          sourceSite: sample?.sourceSite ?? input.sourceSite,
+        },
+      },
+    );
+    response.status(201).json({ case: nextCase });
+  });
+
+  app.post("/api/cases/:caseId/study-context", parseJson, async (request, response) => {
+    const record = await loadCaseOrRespondNotFound(store, response, readRouteParam(request.params.caseId));
+    if (!record) {
+      return;
+    }
+
+    const input = attachStudyContextSchema.parse(request.body ?? {});
+    const nextCase = attachStudyContext(record, input);
+    await store.saveCase(nextCase);
+    await appendAuditEvent(
+      auditStore,
+      response,
+      {
+        caseId: nextCase.caseId,
+        eventType: "study-context.attached",
+        action: "attach_study_context",
+        occurredAt: nextCase.studyContext?.receivedAt ?? nextCase.updatedAt,
+        details: {
+          source: nextCase.studyContext?.source ?? input.source,
+          seriesCount: nextCase.studyContext?.series.length ?? 0,
+          hasDicomWebBaseUrl: Boolean(nextCase.studyContext?.dicomWebBaseUrl),
+        },
+      },
+    );
+    response.json({ case: nextCase });
+  });
+
+  app.post("/api/cases/:caseId/qc-summary", parseJson, async (request, response) => {
+    const record = await loadCaseOrRespondNotFound(store, response, readRouteParam(request.params.caseId));
+    if (!record) {
+      return;
+    }
+
+    const input = recordQcSummarySchema.parse(request.body ?? {});
+    const nextCase = recordQcSummary(record, input);
+    await store.saveCase(nextCase);
+    await appendAuditEvent(
+      auditStore,
+      response,
+      {
+        caseId: nextCase.caseId,
+        eventType: "qc.recorded",
+        action: "record_qc_summary",
+        occurredAt: nextCase.qcSummary?.checkedAt ?? nextCase.updatedAt,
+        details: {
+          disposition: nextCase.qcSummary?.disposition ?? input.disposition,
+          issueCount: nextCase.qcSummary?.issues.length ?? 0,
+          checkCount: nextCase.qcSummary?.checks.length ?? 0,
+          metricCount: nextCase.qcSummary?.metrics.length ?? 0,
+        },
+      },
+    );
+    response.json({ case: nextCase });
   });
 
   app.post("/api/cases/:caseId/artifacts", parseJson, async (request, response) => {

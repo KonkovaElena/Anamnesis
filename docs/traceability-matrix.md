@@ -1,8 +1,8 @@
 ---
 title: "Anamnesis Traceability Matrix"
 status: active
-version: "1.0.0"
-last_updated: "2026-04-03"
+version: "1.1.0"
+last_updated: "2026-04-05"
 tags: [anamnesis, traceability, evidence, reference]
 ---
 
@@ -18,8 +18,12 @@ This page is the shortest route for checking whether a product or diligence stat
 
 | Feature | Safe public claim | Implementation anchors | Automated evidence |
 | --- | --- | --- | --- |
-| Structured case intake | The system can create, list, retrieve, and delete workflow cases with typed intake data. | `src/application/create-app.ts`, `src/domain/anamnesis.ts` | `tests/api.test.ts`, `tests/store.test.ts` |
-| Source artifact management | The system can register and remove source artifacts and keep packet state synchronized. | `src/application/create-app.ts`, `src/domain/anamnesis.ts` | `tests/api.test.ts` |
+| Structured case intake | The system can create, list, retrieve, and delete workflow cases with typed intake data. | `src/application/create-app.ts`, `src/domain/anamnesis.ts` | `tests/api.test.ts`, `tests/sqlite-store.test.ts` |
+| Workflow-family-aware case creation | The system can create cases for general intake, MRI second-opinion, and mRNA board-review workflows. | `src/application/create-app/case-schemas.ts`, `src/application/create-app/case-routes.ts`, `src/domain/anamnesis/case-workflow.ts` | `tests/extraction-api.test.ts`, `tests/extraction-foundation.test.ts` |
+| Source artifact management | The system can register and remove source artifacts and keep packet state synchronized. | `src/application/create-app.ts`, `src/domain/anamnesis.ts` | `tests/api.test.ts`, `tests/extraction-api.test.ts` |
+| Derived artifact lineage | The system preserves derived-artifact metadata and parent-child lineage through the public artifact route and packet rendering. | `src/application/create-app/case-schemas.ts`, `src/domain/anamnesis/case-workflow.ts`, `src/domain/anamnesis/evidence-lineage.ts`, `src/domain/anamnesis/packet-workflow.ts` | `tests/extraction-api.test.ts`, `tests/extraction-foundation.test.ts` |
+| Molecular sample registration | The system can register case-scoped molecular samples and surface them in physician packet drafts. | `src/application/create-app/case-schemas.ts`, `src/application/create-app/case-routes.ts`, `src/domain/anamnesis/case-workflow.ts`, `src/domain/anamnesis/packet-workflow.ts` | `tests/extraction-api.test.ts`, `tests/extraction-foundation.test.ts` |
+| Imaging study context and QC | The system can attach imaging study context, record QC summaries, and surface both in physician packet drafts. | `src/application/create-app/case-schemas.ts`, `src/application/create-app/case-routes.ts`, `src/domain/anamnesis/case-workflow.ts`, `src/domain/anamnesis/specialty-context.ts`, `src/domain/anamnesis/packet-workflow.ts` | `tests/extraction-api.test.ts`, `tests/extraction-foundation.test.ts` |
 | Bounded text document ingestion | The system can normalize bounded plain-text and markdown inputs into workflow artifacts. | `src/application/create-app.ts`, `src/domain/anamnesis.ts` | `tests/document-ingestion-api.test.ts`, `tests/document-ingestion.test.ts` |
 | Narrow FHIR inline import | The system can import supported inline `Binary` and `DocumentReference` resources into workflow artifacts. | `src/application/create-app.ts`, `src/domain/anamnesis.ts` | `tests/fhir-import-api.test.ts`, `tests/fhir-import.test.ts` |
 | Narrow FHIR bundle import | The system can import supported `document` and `collection` bundles into workflow artifacts. | `src/application/create-app.ts`, `src/domain/anamnesis.ts` | `tests/fhir-bundle-import-api.test.ts`, `tests/fhir-bundle-import.test.ts` |
@@ -27,7 +31,7 @@ This page is the shortest route for checking whether a product or diligence stat
 | Secure-by-default auth startup | Normal runtime requires `API_KEY`; unauthenticated startup requires an explicit dev override and is blocked in production mode. | `src/index.ts`, `src/bootstrap.ts`, `src/application/auth-middleware.ts` | `tests/auth.test.ts` |
 | Review ledger and packet finalization | The system records explicit clinician reviews and finalizes only approved, non-stale packets. | `src/application/create-app.ts`, `src/domain/anamnesis.ts` | `tests/review-ledger.test.ts`, `tests/finalization.test.ts` |
 | Audit trail and operational counters | The system writes append-only audit events for write flows and exposes aggregate counters. | `src/application/create-app.ts`, `src/domain/anamnesis.ts`, `src/infrastructure/*AuditTrailStore.ts` | `tests/audit-trail.test.ts`, `tests/api.test.ts` |
-| Encrypted durable persistence | The system can persist cases in SQLite with AES-256-GCM encryption at rest when configured. | `src/infrastructure/SqliteAnamnesisStore.ts`, `src/infrastructure/encryption.ts`, `src/bootstrap.ts` | `tests/encryption.test.ts`, `tests/store.test.ts` |
+| Encrypted durable persistence | The system can persist cases in SQLite with AES-256-GCM encryption at rest when configured. | `src/infrastructure/SqliteAnamnesisStore.ts`, `src/infrastructure/encryption.ts`, `src/bootstrap.ts` | `tests/encryption.test.ts`, `tests/sqlite-store.test.ts` |
 | Graceful shutdown | The process exposes health/readiness behavior and drains on shutdown. | `src/index.ts`, `src/graceful-shutdown.ts`, `src/application/create-app.ts` | `tests/shutdown.test.ts`, `tests/api.test.ts` |
 
 ## Use Rule

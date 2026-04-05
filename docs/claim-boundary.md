@@ -1,8 +1,8 @@
 ---
 title: "Anamnesis Claim Boundary"
 status: active
-version: "1.1.0"
-last_updated: "2026-04-03"
+version: "1.1.1"
+last_updated: "2026-04-05"
 tags: [anamnesis, healthcare, claim-boundary, reference]
 ---
 
@@ -11,7 +11,11 @@ tags: [anamnesis, healthcare, claim-boundary, reference]
 ## Implemented Truth
 
 - the repository stores cases in SQLite with AES-256-GCM encryption at rest (or in memory when no store path is configured);
+- it creates workflow-family-aware cases for `GENERAL_INTAKE`, `MRI_SECOND_OPINION`, and `MRNA_BOARD_REVIEW`;
 - it registers source artifacts (with future-date rejection);
+- it preserves derived-artifact metadata and parent-child lineage when artifacts declare upstream artifact ids;
+- it registers molecular samples on a case;
+- it attaches imaging study context and records QC summaries for imaging-review workflows;
 - it ingests bounded `text/plain` and `text/markdown` documents into source artifacts;
 - it imports inline FHIR `Binary` and `DocumentReference` resources that carry `text/plain` or `text/markdown` payloads into source artifacts;
 - it imports bounded FHIR `Bundle` resources of type `document` or `collection` into source artifacts;
@@ -33,7 +37,7 @@ tags: [anamnesis, healthcare, claim-boundary, reference]
 - triage verdict generation;
 - treatment planning;
 - prescription logic;
-- multipart upload or OCR document ingestion;
+- multipart upload, OCR document ingestion, imaging pixel-data ingestion, or genomics file transport;
 - FHIR REST server behavior;
 - FHIR transaction handling;
 - external Binary dereference or ungated `attachment.url` dereference;

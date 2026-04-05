@@ -4,8 +4,11 @@ import { IdGenerator } from "./ids";
 
 export const AuditEventTypeSchema = z.enum([
   "case.created",
+  "sample.registered",
   "artifact.added",
   "artifact.removed",
+  "study-context.attached",
+  "qc.recorded",
   "document.ingested",
   "fhir.imported",
   "fhir.bundle.imported",

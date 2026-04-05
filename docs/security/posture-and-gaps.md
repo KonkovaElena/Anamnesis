@@ -1,8 +1,8 @@
 ---
 title: "Anamnesis Security Posture And Gaps"
 status: active
-version: "1.0.0"
-last_updated: "2026-04-03"
+version: "1.0.1"
+last_updated: "2026-04-05"
 tags: [anamnesis, security, evidence]
 ---
 
@@ -71,6 +71,7 @@ Operator recommendation:
 - Cases can persist in SQLite when `STORE_PATH` is configured.
 - Encrypted persistence requires `ENCRYPTION_KEY` and is enforced when `STORE_PATH` is set.
 - Audit history is append-only at the application level and survives case deletion.
+- Sample-registration metadata, imaging study identifiers, and QC summaries currently live inside the same encrypted case record rather than under separate field-level compartmentalization.
 
 What is not yet true:
 
@@ -86,7 +87,8 @@ What is not yet true:
 3. There is no central secret manager integration or automated key rotation workflow in this repository.
 4. The audit trail is append-only in software terms, but not cryptographically sealed.
 5. There is no formal backup, restore, or disaster-recovery runbook in the active docs set yet.
-6. The security posture is strong for the current narrow workflow surface, but it is not a claim of regulatory clearance or production security certification.
+6. Imaging study identifiers and molecular sample metadata are encrypted at rest with the case record, but they are not isolated behind a second compartment or field-level key boundary.
+7. The security posture is strong for the current narrow workflow surface, but it is not a claim of regulatory clearance or production security certification.
 
 ## Operator Baseline
 

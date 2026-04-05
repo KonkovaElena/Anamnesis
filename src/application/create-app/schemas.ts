@@ -1,4 +1,10 @@
-export { addArtifactSchema, createCaseSchema } from "./case-schemas";
+export {
+  addArtifactSchema,
+  attachStudyContextSchema,
+  createCaseSchema,
+  recordQcSummarySchema,
+  registerSampleSchema,
+} from "./case-schemas";
 export {
   documentIngestionSchema,
   fhirBundleImportSchema,

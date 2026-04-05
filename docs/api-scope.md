@@ -1,8 +1,8 @@
 ---
 title: "Anamnesis API Scope"
 status: active
-version: "1.2.0"
-last_updated: "2026-04-03"
+version: "1.2.1"
+last_updated: "2026-04-05"
 tags: [anamnesis, api, reference]
 ---
 
@@ -41,6 +41,9 @@ This is an organizational workflow API, not a diagnostic or treatment API.
 | `/api/cases/{caseId}` | `DELETE` | Delete a case and append `case.deleted` to the audit trail. |
 | `/api/cases/{caseId}/artifacts` | `POST` | Register a source artifact and stale any active packet drafts. |
 | `/api/cases/{caseId}/artifacts/{artifactId}` | `DELETE` | Remove a source artifact and stale any active packet drafts. |
+| `/api/cases/{caseId}/samples` | `POST` | Register a molecular sample for case-scoped review workflows. |
+| `/api/cases/{caseId}/study-context` | `POST` | Attach imaging study context and initialize pending QC state when needed. |
+| `/api/cases/{caseId}/qc-summary` | `POST` | Record a QC disposition for an attached imaging study context. |
 | `/api/cases/{caseId}/document-ingestions` | `POST` | Normalize bounded text into a source artifact plus ingestion metadata. |
 | `/api/cases/{caseId}/fhir-imports` | `POST` | Import one supported inline FHIR resource into a source artifact. |
 | `/api/cases/{caseId}/fhir-bundle-imports` | `POST` | Import one supported FHIR bundle into one or more source artifacts. `document` bundles must include the standard document envelope for this slice. |
@@ -74,10 +77,13 @@ Document and FHIR import responses now expose explicit profile metadata so clien
 - `correlationId` records the originating HTTP request correlation and mirrors the `x-request-id` header assigned when the event was created through the API.
 - `causationId` is optional and reserved for future chained event flows.
 - ingestion-related audit events include normalization and import profile metadata inside `details`.
+- extraction-related audit events cover sample registration, study-context attachment, and QC-summary recording.
 
 ## Workflow Semantics
 
 - New cases start in `INTAKING`.
+- New cases can declare `GENERAL_INTAKE`, `MRI_SECOND_OPINION`, or `MRNA_BOARD_REVIEW` as their workflow family.
+- Sample registration, study-context attachment, and QC-summary recording enrich packet drafts but do not by themselves approve or finalize packets.
 - Adding or ingesting evidence moves a case toward packet readiness and marks existing packets stale.
 - Packets are always draft workflow artifacts, not diagnoses or treatment plans.
 - Reviews append immutable ledger entries to the packet.

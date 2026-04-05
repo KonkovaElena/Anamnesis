@@ -11,7 +11,11 @@ Anamnesis is designed as a narrow standalone slice for healthcare-adjacent workf
 ## What Is Implemented Today
 
 - structured case intake and case lifecycle APIs;
+- workflow-family-aware case creation for general intake, MRI second-opinion, and mRNA board-review paths;
 - source artifact registration and removal with packet staleness tracking;
+- derived artifact metadata carry-through for lineage-aware evidence bundles;
+- molecular sample registration for case-scoped review workflows;
+- imaging study-context attachment and QC-summary recording for second-opinion workflows;
 - bounded text document ingestion for `text/plain` and `text/markdown`;
 - bounded FHIR-compatible import for inline `Binary` and `DocumentReference` resources carrying `text/plain` or `text/markdown` payloads;
 - bounded FHIR Bundle import for `document` and `collection` bundles, with `document` bundles requiring a `Composition` first entry plus `identifier.system`, `identifier.value`, and `timestamp`;
@@ -31,7 +35,7 @@ Anamnesis is designed as a narrow standalone slice for healthcare-adjacent workf
 - clinical validation or regulatory clearance;
 - general-purpose FHIR REST server behavior;
 - SMART on FHIR authorization flows;
-- imaging, genomics, wearable ingestion, or OCR pipelines;
+- imaging pixel-data ingestion, genomics file-transport pipelines, wearable ingestion, or OCR pipelines;
 - EHR replacement.
 
 ## Architecture At A Glance
@@ -186,6 +190,9 @@ Operational probes:
 - `DELETE /api/cases/:caseId`
 - `POST /api/cases/:caseId/artifacts`
 - `DELETE /api/cases/:caseId/artifacts/:artifactId`
+- `POST /api/cases/:caseId/samples`
+- `POST /api/cases/:caseId/study-context`
+- `POST /api/cases/:caseId/qc-summary`
 - `POST /api/cases/:caseId/document-ingestions`
 - `POST /api/cases/:caseId/fhir-imports`
 - `POST /api/cases/:caseId/fhir-bundle-imports`

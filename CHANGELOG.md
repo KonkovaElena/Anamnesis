@@ -8,6 +8,8 @@ The format is based on Keep a Changelog and the project uses Semantic Versioning
 
 ### Added
 
+- workflow-family-aware case creation and case-scoped extraction routes for molecular samples, imaging study context, and QC summaries;
+- public artifact-route support for derived-artifact metadata and evidence-lineage-aware packet rendering;
 - `CITATION.cff` for GitHub-native citation rendering and later DOI backfill;
 - `.github/CODEOWNERS` for review routing and ruleset-based protection;
 - `.github/dependabot.yml` for scheduled npm and GitHub Actions dependency maintenance.
@@ -19,6 +21,7 @@ The format is based on Keep a Changelog and the project uses Semantic Versioning
 
 ### Changed
 
+- `README.md`, `docs/api-scope.md`, `docs/claim-boundary.md`, and `docs/traceability-matrix.md` now document the MRI/mRNA extraction foundations and correct traceability anchors to the live test suite;
 - GitHub publishing guidance now covers code owner protection, repository citation, and archival DOI backfill;
 - CI push triggers now target the canonical `main` branch only after the standalone branch rename;
 - issue intake now exposes private security-reporting guidance directly from the GitHub issue chooser;

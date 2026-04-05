@@ -37,6 +37,8 @@ tags:
     description: Case creation, retrieval, listing, and deletion.
   - name: Artifacts
     description: Source artifact registration and removal.
+  - name: Extraction
+    description: Workflow enrichment for samples, imaging study context, and QC summaries.
   - name: Ingestion
     description: Text document ingestion into bounded source artifacts.
   - name: FHIR
@@ -59,7 +61,7 @@ paths:
       tags: [Cases]
       summary: Create case
       operationId: createCase
-      description: Create a case with structured intake. New cases start in `INTAKING`.
+      description: Create a case with structured intake and an optional workflow family. New cases start in `INTAKING`.
       requestBody:
         required: true
         content:
@@ -175,6 +177,97 @@ paths:
           $ref: '#/components/responses/UnauthorizedError'
         '404':
           $ref: '#/components/responses/NotFoundError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+  /api/cases/{caseId}/samples:
+    parameters:
+      - $ref: '#/components/parameters/CaseId'
+    post:
+      tags: [Extraction]
+      summary: Register sample
+      operationId: registerSample
+      description: Register a case-scoped molecular sample for downstream review workflows.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterSampleRequest'
+      responses:
+        '201':
+          description: Sample registered and case returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+  /api/cases/{caseId}/study-context:
+    parameters:
+      - $ref: '#/components/parameters/CaseId'
+    post:
+      tags: [Extraction]
+      summary: Attach study context
+      operationId: attachStudyContext
+      description: Attach imaging study metadata and initialize pending QC state for case-scoped review workflows.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttachStudyContextRequest'
+      responses:
+        '200':
+          description: Study context attached and case returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+  /api/cases/{caseId}/qc-summary:
+    parameters:
+      - $ref: '#/components/parameters/CaseId'
+    post:
+      tags: [Extraction]
+      summary: Record QC summary
+      operationId: recordQcSummary
+      description: Record a QC disposition and optional QC detail for an attached imaging study context.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordQcSummaryRequest'
+      responses:
+        '200':
+          description: QC summary recorded and case returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
         '429':
           $ref: '#/components/responses/TooManyRequestsError'
   /api/cases/{caseId}/document-ingestions:
@@ -561,15 +654,34 @@ components:
     CaseStatus:
       type: string
       enum: [INTAKING, READY_FOR_PACKET, REVIEW_REQUIRED]
+    WorkflowFamily:
+      type: string
+      enum: [GENERAL_INTAKE, MRI_SECOND_OPINION, MRNA_BOARD_REVIEW]
     ArtifactType:
       type: string
       enum: [note, lab, summary, report, imaging-summary]
+    ArtifactClass:
+      type: string
+      enum: [SOURCE, DERIVED, REVIEW_PACKET, HANDOFF_PACKET]
+    SourceArtifactSemanticType:
+      type: string
+      enum:
+        [clinical-note, lab-panel, clinical-summary, imaging-study, imaging-qc-summary, tumor-dna-fastq, normal-dna-fastq, tumor-rna-fastq, board-evidence-bundle]
     DocumentContentType:
       type: string
       enum: [text/plain, text/markdown]
     DocumentNormalizationProfile:
       type: string
       enum: [document.text.plain.v1, document.text.markdown.v1]
+    SampleType:
+      type: string
+      enum: [TUMOR_DNA, NORMAL_DNA, TUMOR_RNA, FOLLOW_UP]
+    AssayType:
+      type: string
+      enum: [WES, WGS, RNA_SEQ, PANEL, OTHER]
+    QcCheckStatus:
+      type: string
+      enum: [pass, warn, reject]
     ReviewAction:
       type: string
       enum: [approved, changes_requested, rejected]
@@ -623,6 +735,23 @@ components:
           format: uuid
         artifactType:
           $ref: '#/components/schemas/ArtifactType'
+        artifactClass:
+          $ref: '#/components/schemas/ArtifactClass'
+        semanticType:
+          $ref: '#/components/schemas/SourceArtifactSemanticType'
+        sampleId:
+          type: string
+        artifactHash:
+          type: string
+        storageUri:
+          type: string
+        mediaType:
+          type: string
+        derivedFromArtifactIds:
+          type: array
+          items:
+            type: string
+            format: uuid
         title:
           type: string
         summary:
@@ -634,6 +763,148 @@ components:
         createdAt:
           type: string
           format: date-time
+    SampleRecord:
+      type: object
+      additionalProperties: false
+      required: [sampleId, sampleType, assayType, accessionId, sourceSite, registeredAt]
+      properties:
+        sampleId:
+          type: string
+        sampleType:
+          $ref: '#/components/schemas/SampleType'
+        assayType:
+          $ref: '#/components/schemas/AssayType'
+        accessionId:
+          type: string
+        sourceSite:
+          type: string
+        registeredAt:
+          type: string
+          format: date-time
+    StudySeriesRecord:
+      type: object
+      additionalProperties: false
+      required: [seriesInstanceUid, seriesDescription, modality, sequenceLabel, instanceCount, volumeDownloadUrl]
+      properties:
+        seriesInstanceUid:
+          type: string
+        seriesDescription:
+          oneOf:
+            - type: string
+            - type: 'null'
+        modality:
+          type: string
+        sequenceLabel:
+          oneOf:
+            - type: string
+            - type: 'null'
+        instanceCount:
+          oneOf:
+            - type: integer
+              minimum: 0
+            - type: 'null'
+        volumeDownloadUrl:
+          oneOf:
+            - type: string
+              format: uri
+            - type: 'null'
+    StudyContextRecord:
+      type: object
+      additionalProperties: false
+      required:
+        [studyInstanceUid, dicomStudyInstanceUid, accessionNumber, studyDate, sourceArchive, dicomWebBaseUrl, metadataSummary, series, receivedAt, source]
+      properties:
+        studyInstanceUid:
+          type: string
+        dicomStudyInstanceUid:
+          type: string
+        accessionNumber:
+          oneOf:
+            - type: string
+            - type: 'null'
+        studyDate:
+          oneOf:
+            - $ref: '#/components/schemas/DateOnly'
+            - type: 'null'
+        sourceArchive:
+          oneOf:
+            - type: string
+            - type: 'null'
+        dicomWebBaseUrl:
+          oneOf:
+            - type: string
+              format: uri
+            - type: 'null'
+        metadataSummary:
+          type: array
+          items:
+            type: string
+        series:
+          type: array
+          items:
+            $ref: '#/components/schemas/StudySeriesRecord'
+        receivedAt:
+          type: string
+          format: date-time
+        source:
+          type: string
+          enum: [public-api, internal-ingest]
+    QcMetricRecord:
+      type: object
+      additionalProperties: false
+      required: [name, value, unit]
+      properties:
+        name:
+          type: string
+        value:
+          type: number
+        unit:
+          oneOf:
+            - type: string
+            - type: 'null'
+    QcCheckRecord:
+      type: object
+      additionalProperties: false
+      required: [checkId, status, detail]
+      properties:
+        checkId:
+          type: string
+        status:
+          $ref: '#/components/schemas/QcCheckStatus'
+        detail:
+          type: string
+    QcSummaryRecord:
+      type: object
+      additionalProperties: false
+      required: [disposition, summary, checkedAt, source, checks, metrics, issues]
+      properties:
+        disposition:
+          type: string
+          enum: [pending, pass, warn, reject]
+        summary:
+          oneOf:
+            - type: string
+            - type: 'null'
+        checkedAt:
+          oneOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+        source:
+          type: string
+          enum: [pending, internal-inference]
+        checks:
+          type: array
+          items:
+            $ref: '#/components/schemas/QcCheckRecord'
+        metrics:
+          type: array
+          items:
+            $ref: '#/components/schemas/QcMetricRecord'
+        issues:
+          type: array
+          items:
+            type: string
     ClinicalReviewEntry:
       type: object
       additionalProperties: false
@@ -722,10 +993,12 @@ components:
       additionalProperties: false
       required:
         - caseId
+        - workflowFamily
         - status
         - createdAt
         - updatedAt
         - intake
+        - samples
         - artifacts
         - physicianPackets
       properties:
@@ -734,6 +1007,8 @@ components:
           format: uuid
         patientLabel:
           type: string
+        workflowFamily:
+          $ref: '#/components/schemas/WorkflowFamily'
         status:
           $ref: '#/components/schemas/CaseStatus'
         createdAt:
@@ -744,6 +1019,14 @@ components:
           format: date-time
         intake:
           $ref: '#/components/schemas/CaseIntake'
+        samples:
+          type: array
+          items:
+            $ref: '#/components/schemas/SampleRecord'
+        studyContext:
+          $ref: '#/components/schemas/StudyContextRecord'
+        qcSummary:
+          $ref: '#/components/schemas/QcSummaryRecord'
         artifacts:
           type: array
           items:
@@ -836,8 +1119,11 @@ components:
           type: string
           enum:
             - case.created
+            - sample.registered
             - artifact.added
             - artifact.removed
+            - study-context.attached
+            - qc.recorded
             - document.ingested
             - fhir.imported
             - fhir.bundle.imported
@@ -1135,6 +1421,8 @@ components:
           type: string
           minLength: 1
           maxLength: 120
+        workflowFamily:
+          $ref: '#/components/schemas/WorkflowFamily'
         intake:
           $ref: '#/components/schemas/CaseIntake'
     AddArtifactRequest:
@@ -1144,6 +1432,33 @@ components:
       properties:
         artifactType:
           $ref: '#/components/schemas/ArtifactType'
+        artifactClass:
+          $ref: '#/components/schemas/ArtifactClass'
+        semanticType:
+          $ref: '#/components/schemas/SourceArtifactSemanticType'
+        sampleId:
+          type: string
+          minLength: 1
+          maxLength: 120
+        artifactHash:
+          type: string
+          minLength: 1
+          maxLength: 300
+        storageUri:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        mediaType:
+          type: string
+          minLength: 1
+          maxLength: 160
+        derivedFromArtifactIds:
+          type: array
+          minItems: 1
+          maxItems: 64
+          items:
+            type: string
+            format: uuid
         title:
           type: string
           minLength: 1
@@ -1158,6 +1473,161 @@ components:
           type: string
           minLength: 1
           maxLength: 300
+    RegisterSampleRequest:
+      type: object
+      additionalProperties: false
+      required: [sampleId, sampleType, assayType, accessionId, sourceSite]
+      properties:
+        sampleId:
+          type: string
+          minLength: 1
+          maxLength: 120
+        sampleType:
+          $ref: '#/components/schemas/SampleType'
+        assayType:
+          $ref: '#/components/schemas/AssayType'
+        accessionId:
+          type: string
+          minLength: 1
+          maxLength: 120
+        sourceSite:
+          type: string
+          minLength: 1
+          maxLength: 160
+    StudySeriesInput:
+      type: object
+      additionalProperties: false
+      required: [seriesInstanceUid]
+      properties:
+        seriesInstanceUid:
+          type: string
+          minLength: 1
+          maxLength: 200
+        seriesDescription:
+          type: string
+          minLength: 1
+          maxLength: 300
+        modality:
+          type: string
+          minLength: 1
+          maxLength: 32
+        sequenceLabel:
+          type: string
+          minLength: 1
+          maxLength: 120
+        instanceCount:
+          type: integer
+          minimum: 0
+        volumeDownloadUrl:
+          type: string
+          format: uri
+          maxLength: 1000
+    StudyContextInput:
+      type: object
+      additionalProperties: false
+      properties:
+        studyInstanceUid:
+          type: string
+          minLength: 1
+          maxLength: 200
+        accessionNumber:
+          type: string
+          minLength: 1
+          maxLength: 120
+        studyDate:
+          $ref: '#/components/schemas/DateOnly'
+        sourceArchive:
+          type: string
+          minLength: 1
+          maxLength: 160
+        dicomWebBaseUrl:
+          type: string
+          format: uri
+          maxLength: 1000
+        metadataSummary:
+          type: array
+          maxItems: 32
+          items:
+            type: string
+            minLength: 1
+            maxLength: 300
+        series:
+          type: array
+          maxItems: 64
+          items:
+            $ref: '#/components/schemas/StudySeriesInput'
+    AttachStudyContextRequest:
+      type: object
+      additionalProperties: false
+      required: [source]
+      properties:
+        source:
+          type: string
+          enum: [public-api, internal-ingest]
+        studyContext:
+          $ref: '#/components/schemas/StudyContextInput'
+    QcMetricInput:
+      type: object
+      additionalProperties: false
+      required: [name, value]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        value:
+          type: number
+        unit:
+          type: string
+          minLength: 1
+          maxLength: 32
+    QcCheckInput:
+      type: object
+      additionalProperties: false
+      required: [checkId, status, detail]
+      properties:
+        checkId:
+          type: string
+          minLength: 1
+          maxLength: 120
+        status:
+          $ref: '#/components/schemas/QcCheckStatus'
+        detail:
+          type: string
+          minLength: 1
+          maxLength: 500
+    RecordQcSummaryRequest:
+      type: object
+      additionalProperties: false
+      required: [disposition]
+      properties:
+        disposition:
+          $ref: '#/components/schemas/QcCheckStatus'
+        issues:
+          type: array
+          maxItems: 32
+          items:
+            type: string
+            minLength: 1
+            maxLength: 300
+        qcSummary:
+          type: object
+          additionalProperties: false
+          properties:
+            summary:
+              type: string
+              minLength: 1
+              maxLength: 4000
+            checks:
+              type: array
+              maxItems: 64
+              items:
+                $ref: '#/components/schemas/QcCheckInput'
+            metrics:
+              type: array
+              maxItems: 64
+              items:
+                $ref: '#/components/schemas/QcMetricInput'
     DocumentIngestionRequest:
       type: object
       additionalProperties: false
