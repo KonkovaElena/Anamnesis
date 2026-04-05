@@ -3,11 +3,18 @@ import {
   type AddArtifactInput,
   type AnamnesisCase,
   AnamnesisDomainError,
+  type AttachStudyContextInput,
   type CaseStatus,
   type CreateCaseInput,
   type PhysicianPacket,
+  type RegisterSampleInput,
   type SourceArtifact,
 } from "./contracts";
+import {
+  createPendingQcSummary,
+  createQcSummaryRecord,
+  createStudyContextRecord,
+} from "./specialty-context";
 
 function toIso(now: Date): string {
   return now.toISOString();
@@ -33,6 +40,7 @@ export function createCase(input: CreateCaseInput, now = new Date()): AnamnesisC
   return {
     caseId: randomUUID(),
     patientLabel: input.patientLabel,
+    workflowFamily: input.workflowFamily ?? "GENERAL_INTAKE",
     status: "INTAKING",
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -42,6 +50,7 @@ export function createCase(input: CreateCaseInput, now = new Date()): AnamnesisC
       historySummary: input.intake.historySummary,
       questionsForClinician: [...input.intake.questionsForClinician],
     },
+    samples: [],
     artifacts: [],
     physicianPackets: [],
   };
@@ -56,6 +65,13 @@ export function addArtifact(
   const artifact: SourceArtifact = {
     artifactId: randomUUID(),
     artifactType: input.artifactType,
+    artifactClass: input.artifactClass,
+    semanticType: input.semanticType,
+    sampleId: input.sampleId,
+    artifactHash: input.artifactHash,
+    storageUri: input.storageUri,
+    mediaType: input.mediaType,
+    derivedFromArtifactIds: input.derivedFromArtifactIds ? [...input.derivedFromArtifactIds] : undefined,
     title: input.title,
     summary: input.summary,
     sourceDate: input.sourceDate,
@@ -100,5 +116,84 @@ export function removeArtifact(
     updatedAt,
     artifacts,
     physicianPackets: markPacketsStale(record.physicianPackets, updatedAt),
+  };
+}
+
+export function registerSample(
+  record: AnamnesisCase,
+  input: RegisterSampleInput,
+  now = new Date(),
+): AnamnesisCase {
+  if (record.samples.some((sample) => sample.sampleId === input.sampleId)) {
+    throw new AnamnesisDomainError(
+      "sample_already_registered",
+      409,
+      "Sample is already registered for this case.",
+    );
+  }
+
+  const updatedAt = toIso(now);
+
+  return {
+    ...record,
+    updatedAt,
+    samples: [
+      ...record.samples,
+      {
+        sampleId: input.sampleId,
+        sampleType: input.sampleType,
+        assayType: input.assayType,
+        accessionId: input.accessionId,
+        sourceSite: input.sourceSite,
+        registeredAt: updatedAt,
+      },
+    ],
+  };
+}
+
+export function attachStudyContext(
+  record: AnamnesisCase,
+  input: AttachStudyContextInput,
+  now = new Date(),
+): AnamnesisCase {
+  const updatedAt = toIso(now);
+
+  return {
+    ...record,
+    updatedAt,
+    studyContext: createStudyContextRecord({
+      fallbackStudyUid: record.caseId,
+      receivedAt: updatedAt,
+      source: input.source,
+      studyContext: input.studyContext,
+    }),
+    qcSummary: record.qcSummary ?? createPendingQcSummary(),
+  };
+}
+
+export function recordQcSummary(
+  record: AnamnesisCase,
+  input: { disposition: "pass" | "warn" | "reject"; issues?: string[]; qcSummary?: { summary?: string; checks?: Array<{ checkId: string; status: "pass" | "warn" | "reject"; detail: string }>; metrics?: Array<{ name: string; value: number; unit?: string }> } },
+  now = new Date(),
+): AnamnesisCase {
+  if (!record.studyContext) {
+    throw new AnamnesisDomainError(
+      "study_context_required",
+      409,
+      "A study context must be attached before a QC summary can be recorded.",
+    );
+  }
+
+  const checkedAt = toIso(now);
+
+  return {
+    ...record,
+    updatedAt: checkedAt,
+    qcSummary: createQcSummaryRecord({
+      disposition: input.disposition,
+      issues: input.issues,
+      qcSummary: input.qcSummary,
+      checkedAt,
+    }),
   };
 }
