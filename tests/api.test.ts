@@ -5,6 +5,11 @@ import { type AddressInfo } from "node:net";
 import test from "node:test";
 import { createApp } from "../src/application/create-app";
 import { InMemoryAnamnesisStore } from "../src/infrastructure/InMemoryAnamnesisStore";
+import {
+  APPROVED_REVIEW_INPUT,
+  LAB_ARTIFACT_INPUT,
+  SUMMARY_ARTIFACT_INPUT,
+} from "./fixtures";
 import { jsonRequest, withServer } from "./helpers";
 
 test("request validation rejects unrecognized fields instead of silently stripping them", async () => {
@@ -80,6 +85,7 @@ test("adding a new artifact marks existing physician packets as stale", async ()
     await jsonRequest(baseUrl, `/api/cases/${caseId}/artifacts`, {
       method: "POST",
       body: {
+        ...SUMMARY_ARTIFACT_INPUT,
         artifactType: "summary",
         title: "Urgent care summary",
         summary: "Initial clinician note documented dizziness without diagnosis.",
@@ -102,6 +108,7 @@ test("adding a new artifact marks existing physician packets as stale", async ()
     await jsonRequest(baseUrl, `/api/cases/${caseId}/artifacts`, {
       method: "POST",
       body: {
+        ...LAB_ARTIFACT_INPUT,
         artifactType: "lab",
         title: "Follow-up lab panel",
         summary: "Additional evidence was registered after the packet draft.",
@@ -198,6 +205,7 @@ test("packet drafting requires evidence first and remains explicitly non-diagnos
       {
         method: "POST",
         body: {
+          ...LAB_ARTIFACT_INPUT,
           artifactType: "lab",
           title: "CBC results from urgent care",
           summary: "Mild anemia noted. No other current interpretation.",
@@ -275,6 +283,7 @@ test("operations summary and metrics reflect the live in-memory state", async ()
     await jsonRequest(baseUrl, `/api/cases/${secondCase.body.case.caseId}/artifacts`, {
       method: "POST",
       body: {
+        ...SUMMARY_ARTIFACT_INPUT,
         artifactType: "summary",
         title: "Home symptom log",
         summary: "User recorded shortness of breath after moderate exertion for four days.",
@@ -326,6 +335,7 @@ test("operations summary and metrics expose review, finalization, and audit coun
     await jsonRequest(baseUrl, `/api/cases/${caseId}/artifacts`, {
       method: "POST",
       body: {
+        ...SUMMARY_ARTIFACT_INPUT,
         artifactType: "summary",
         title: "Home symptom summary",
         summary: "Patient logged exertional palpitations for five days.",
@@ -347,8 +357,8 @@ test("operations summary and metrics expose review, finalization, and audit coun
     await jsonRequest(baseUrl, `/api/cases/${caseId}/physician-packets/${packetId}/reviews`, {
       method: "POST",
       body: {
+        ...APPROVED_REVIEW_INPUT,
         reviewerName: "Dr. Review",
-        action: "approved",
         comments: "Complete for downstream handoff.",
       },
     });
@@ -515,6 +525,7 @@ test("DELETE /api/cases/:caseId/artifacts/:artifactId removes artifact and marks
     await jsonRequest(baseUrl, `/api/cases/${caseId}/artifacts`, {
       method: "POST",
       body: {
+        ...SUMMARY_ARTIFACT_INPUT,
         artifactType: "summary",
         title: "Initial assessment notes",
         summary: "Runner with acute left knee pain, no swelling.",
@@ -527,6 +538,7 @@ test("DELETE /api/cases/:caseId/artifacts/:artifactId removes artifact and marks
       {
         method: "POST",
         body: {
+          ...LAB_ARTIFACT_INPUT,
           artifactType: "lab",
           title: "Blood panel",
           summary: "Standard panel results within normal limits.",
@@ -616,6 +628,7 @@ test("DELETE last artifact reverts case status to INTAKING", async () => {
     }>(baseUrl, `/api/cases/${caseId}/artifacts`, {
       method: "POST",
       body: {
+        ...LAB_ARTIFACT_INPUT,
         artifactType: "lab",
         title: "CBC panel",
         summary: "Results within normal ranges.",
