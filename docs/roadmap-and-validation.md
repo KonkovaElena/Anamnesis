@@ -1,8 +1,8 @@
 ---
 title: "Anamnesis Roadmap And Validation"
 status: active
-version: "1.1.1"
-last_updated: "2026-04-05"
+version: "1.2.0"
+last_updated: "2026-04-06"
 tags: [anamnesis, healthcare, roadmap, validation]
 ---
 
@@ -29,7 +29,7 @@ Then verify:
 
 - `GET /healthz`
 - `GET /readyz`
-- `GET /metrics`
+- `GET /metrics` as an operational probe rather than a business API
 
 This is the current local closure rail for implemented scope.
 
@@ -49,10 +49,11 @@ These are repository-operations tasks, not product-scope upgrades.
 
 ## Immediate April 2026 Priorities
 
-1. Typed artifact-normalization fixtures and a broader evaluation corpus for the existing text and FHIR seams.
-2. More explicit interoperability narrowing through profile-aware tests before any broader FHIR claim.
-3. Close the GitHub-side dependency-graph and repository-protection gap recorded in the post-push audit.
-4. A future local-model experimentation rail behind an adapter boundary and offline evaluation only, not in the public write path.
+1. Replace the single shared bearer-secret posture with a clearer operator model and a staged path toward stronger user or role scoping if the standalone remains server-side.
+2. Publish backup, restore, and key-rotation operating guidance before making stronger security or durability claims.
+3. Tighten the audit-integrity narrative: keep append-only workflow history as implemented truth, but treat sealing, notarization, and stronger confidentiality boundaries as explicit backlog.
+4. Continue profile-oriented interoperability narrowing and conformance language discipline before any broader FHIR claim.
+5. Close the GitHub-side dependency-graph and repository-protection gap recorded in the post-push audit.
 
 ## Current Extraction Foundations
 
@@ -129,6 +130,12 @@ These are repository-operations tasks, not product-scope upgrades.
 - adding a new model runtime, agent, or serving sidecar is not enough to widen public claims;
 - future AI subsystems need evaluation fixtures, failure taxonomies, and audit visibility before they touch the main workflow;
 - architecture should be transplanted minimally: explicit composition and adapter seams first, heavier platform machinery later only if justified.
+
+## April 2026 Guardrails From The Hyper-Deep Review
+
+- treat `/metrics` auth wording as a documentation-sync problem, not as evidence that the runtime secretly widens public product scope;
+- treat stricter FHIR document-bundle envelope validation as bounded interoperability hardening, not as proof of generic FHIR document-conformance or server behavior;
+- treat shared-secret auth, recovery runbooks, and stronger audit integrity as real control gaps that deserve roadmap priority.
 
 ## Non-Upgrade Rule
 

@@ -1,8 +1,8 @@
 ---
 title: "Anamnesis Standalone Design"
 status: active
-version: "1.1.0"
-last_updated: "2026-04-03"
+version: "1.1.1"
+last_updated: "2026-04-06"
 tags: [anamnesis, healthcare, standalone, explanation]
 ---
 
@@ -30,6 +30,8 @@ The standalone therefore keeps only the lowest-risk slice that is still useful:
 
 The project should earn any future medical positioning through explicit workflow quality, claim discipline, and later evidence, not by overstating current software behavior.
 
+The April 2026 review keeps that thesis unchanged. The repository is strongest today as a narrow clinician-in-the-loop workflow control plane. The most important remaining gaps are identity granularity beyond a shared bearer secret, stronger audit integrity and confidentiality posture for long-term retention, a documented backup and restore plus key-rotation operating model, and the continued absence of generic FHIR conformance surfaces.
+
 ## Current Storage And Composition
 
 - durable SQLite persistence with AES-256-GCM whole-record encryption at rest;
@@ -49,7 +51,7 @@ The project should earn any future medical positioning through explicit workflow
 The broader future-phase architecture for this project is normalized into this standalone repository rather than kept as an external dependency.
 
 - local scope and phase boundary: `design.md`;
-- April 3 refresh delta and publication-baseline clarification: `docs/design-refresh-2026-04-03.md`;
+- April 2026 refresh delta, publication-baseline clarification, and audit addendum: `docs/design-refresh-2026-04-03.md`;
 - local evidence authority: `docs/academic/evidence-register.md`;
 - local future-phase map: `docs/roadmap-and-validation.md`.
 
@@ -73,6 +75,7 @@ That means terms such as multi-agent orchestration, evidence engine, multipart u
 - packet finalization is workflow finality only, not medical finality;
 - no route returns a diagnosis or treatment recommendation;
 - the status model is operational only, not clinical;
+- `/metrics` remains an intentionally unauthenticated operational surface and should be protected by deployment-side network controls when exposure widens;
 - the docs separate implemented behavior from evidence and roadmap material;
 - public repository protection state is documented separately from application behavior so GitHub settings do not silently masquerade as shipped product capability.
 

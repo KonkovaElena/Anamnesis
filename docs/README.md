@@ -1,11 +1,29 @@
+---
+title: "Anamnesis Documentation Map"
+status: active
+version: "1.1.0"
+last_updated: "2026-04-06"
+tags: [anamnesis, docs, navigation]
+---
+
 # Documentation Map
 
 This page routes the active documentation surfaces for Anamnesis.
 
+## Current Authority Order
+
+Read the current standalone authority in this order:
+
+1. [../design.md](../design.md)
+2. [design-refresh-2026-04-03.md](design-refresh-2026-04-03.md)
+3. [roadmap-and-validation.md](roadmap-and-validation.md)
+4. [academic/evidence-register.md](academic/evidence-register.md)
+5. [claim-boundary.md](claim-boundary.md)
+
 ## Product And Architecture
 
 - [../design.md](../design.md)
-- [design-refresh-2026-04-03.md](design-refresh-2026-04-03.md)
+- [design-refresh-2026-04-03.md](design-refresh-2026-04-03.md) — cumulative April 2026 refresh note
 - [../openapi.yaml](../openapi.yaml)
 - [architecture/overview.md](architecture/overview.md)
 - [api-scope.md](api-scope.md)

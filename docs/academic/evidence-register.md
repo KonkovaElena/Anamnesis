@@ -1,8 +1,8 @@
 ---
 title: "Anamnesis Evidence Register"
 status: active
-version: "1.1.0"
-last_updated: "2026-04-03"
+version: "1.2.0"
+last_updated: "2026-04-06"
 tags: [anamnesis, healthcare, evidence, academic]
 ---
 
@@ -14,6 +14,8 @@ tags: [anamnesis, healthcare, evidence, academic]
 - normalized March 30, 2026 design and evidence material folded into this standalone repository at export time;
 - April 3, 2026 external refresh across interoperability, web-service security, local-model serving, and medical foundation-model positioning;
 - April 3, 2026 standalone design refresh and live GitHub post-push repository audit;
+- April 5, 2026 hyper-deep review across FHIR bundle semantics, auditability, auth posture, and documentation drift;
+- April 2026 official-source refresh across HL7 FHIR R4 Bundle, Binary, DocumentReference, and CapabilityStatement plus HHS HIPAA Security Rule summary, NIST SP 800-66 Rev.2 guidance, OWASP SSRF guidance, and Express security guidance;
 - 2025-2026 research papers used to derive operational controls, not to widen public claims;
 - user research memo treated as roadmap and risk input only.
 
@@ -26,6 +28,7 @@ tags: [anamnesis, healthcare, evidence, academic]
 - `docs/architecture/overview.md`
 - `docs/api-scope.md`
 - `docs/interop/README.md`
+- `docs/security/posture-and-gaps.md`
 - `docs/traceability-matrix.md`
 - `docs/regulatory/positioning.md`
 
@@ -50,12 +53,23 @@ No scope upgrade should be inferred from model availability, benchmark tables, o
 
 ## April 2026 Official Refresh
 
-### Standards And Runtime Guidance
+### Interoperability And Conformance Guidance
 
 | Source | April 2026 observation | Operational consequence for Anamnesis |
 |---|---|---|
-| HL7 FHIR overview | The current published specification remains FHIR R5 / `hl7.fhir.core#5.0.0`; the implementation model is resource composition plus `CapabilityStatement` and `StructureDefinition`. | Keep the current bounded `Binary`, `DocumentReference`, and Bundle seams. Do not present the standalone as a general FHIR server until it ships conformance and profile surfaces. |
-| Express production security guidance | Express still centers production guidance on TLS, input validation, Helmet, brute-force protection, and dependency hygiene. | The current security posture remains directionally correct. Future route growth should keep parser scope narrow and validation explicit. |
+| HL7 FHIR R4 `Bundle` | `document` bundles are envelope-bearing bundles, not arbitrary lists of resources; they rely on `Composition` plus document identifiers and timestamps. | Keep document-bundle acceptance narrow. Envelope checks improve safety, but do not justify generic document-exchange or server-conformance claims. |
+| HL7 FHIR R4 `Binary` | `Binary` is typed payload transport, not a generic ingestion license. | Preserve the current text-only `Binary` boundary and do not widen MIME support from standards language alone. |
+| HL7 FHIR R4 `DocumentReference` | `DocumentReference` attachment semantics allow inline data or bounded URL references, but deployment policy still decides whether dereference is acceptable. | The current explicit, request-gated dereference path remains defensible only with SSRF controls and optional allowlisting. |
+| HL7 FHIR R4 `CapabilityStatement` | Capability discovery is how a FHIR server declares supported conformance and interaction scope. | Because the standalone has no `/metadata` or `CapabilityStatement` surface, it must not be described as a general FHIR server. |
+
+### Security And Regulatory Guidance
+
+| Source | April 2026 observation | Operational consequence for Anamnesis |
+|---|---|---|
+| HHS HIPAA Security Rule summary | Baseline safeguards still center on access control, audit controls, integrity, person or entity authentication, and contingency planning. | Supports the current narrow workflow positioning, but highlights the remaining gaps around RBAC, stronger audit integrity claims, and contingency runbooks. |
+| NIST SP 800-66 Rev.2 | HIPAA implementation guidance continues to push controls into operational practice rather than prose alone. | Backup and restore, key rotation, and operator recovery procedures should stay on the active roadmap before stronger security claims are promoted. |
+| OWASP SSRF Prevention Cheat Sheet | Recommended posture remains layered validation, allowlists where possible, and network-level egress controls. | The current fetch guard is directionally strong, but production posture still benefits from network segmentation and host allowlisting. |
+| Express production security guidance | Express still centers production guidance on TLS, input validation, Helmet, abuse controls, and dependency hygiene. | The current security posture remains directionally correct. Future route growth should keep parser scope narrow and validation explicit. |
 
 ### Local Model And Serving Surfaces
 
