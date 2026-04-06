@@ -223,7 +223,10 @@ export function fhirDocumentBundle(entries?: Record<string, unknown>[]): Record<
   return {
     resourceType: "Bundle",
     type: "document",
-    identifier: { value: "fixture-doc-bundle-001" },
+    identifier: {
+      system: "urn:ietf:rfc:3986",
+      value: "urn:uuid:fixture-doc-bundle-001",
+    },
     timestamp: "2026-04-01T00:00:00Z",
     entry: entries ?? defaultEntries,
   };

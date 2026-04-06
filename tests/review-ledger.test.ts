@@ -1,9 +1,5 @@
 import assert from "node:assert/strict";
-import { once } from "node:events";
-import { createServer } from "node:http";
-import { type AddressInfo } from "node:net";
 import test from "node:test";
-import { bootstrap } from "../src/bootstrap";
 import {
   createCase,
   addArtifact,
@@ -12,44 +8,7 @@ import {
   submitReview,
   type AnamnesisCase,
 } from "../src/domain/anamnesis";
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-async function withServer(run: (baseUrl: string) => Promise<void>) {
-  const { app } = bootstrap({ allowInsecureDevAuth: true });
-  const server = createServer(app);
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
-
-  const address = server.address() as AddressInfo;
-  const baseUrl = `http://127.0.0.1:${address.port}`;
-
-  try {
-    await run(baseUrl);
-  } finally {
-    server.close();
-    await once(server, "close");
-  }
-}
-
-async function jsonRequest<T>(
-  baseUrl: string,
-  path: string,
-  options?: { method?: string; body?: unknown },
-): Promise<{ status: number; body: T }> {
-  const response = await fetch(`${baseUrl}${path}`, {
-    method: options?.method ?? "GET",
-    headers: { "content-type": "application/json" },
-    body: options?.body ? JSON.stringify(options.body) : undefined,
-  });
-
-  return {
-    status: response.status,
-    body: (await response.json()) as T,
-  };
-}
+import { jsonRequest, withServer } from "./helpers";
 
 function seedCaseWithPacket(): {
   record: AnamnesisCase;

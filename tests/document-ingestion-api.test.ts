@@ -1,43 +1,7 @@
 import assert from "node:assert/strict";
-import { once } from "node:events";
-import { createServer } from "node:http";
-import { type AddressInfo } from "node:net";
 import test from "node:test";
-import { bootstrap } from "../src/bootstrap";
-
-async function withServer(run: (baseUrl: string) => Promise<void>) {
-  const { app } = bootstrap({ allowInsecureDevAuth: true });
-  const server = createServer(app);
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
-
-  const address = server.address() as AddressInfo;
-  const baseUrl = `http://127.0.0.1:${address.port}`;
-
-  try {
-    await run(baseUrl);
-  } finally {
-    server.close();
-    await once(server, "close");
-  }
-}
-
-async function jsonRequest<T>(
-  baseUrl: string,
-  path: string,
-  options?: { method?: string; body?: unknown },
-): Promise<{ status: number; body: T }> {
-  const response = await fetch(`${baseUrl}${path}`, {
-    method: options?.method ?? "GET",
-    headers: { "content-type": "application/json" },
-    body: options?.body ? JSON.stringify(options.body) : undefined,
-  });
-
-  return {
-    status: response.status,
-    body: (await response.json()) as T,
-  };
-}
+import { API_INGEST_DOCUMENT_BODY } from "./fixtures";
+import { jsonRequest, withServer } from "./helpers";
 
 test("POST /document-ingestions creates a bounded artifact, stales packets, and records a dedicated audit event", async () => {
   await withServer(async (baseUrl) => {
@@ -81,9 +45,9 @@ test("POST /document-ingestions creates a bounded artifact, stales packets, and 
     }>(baseUrl, `/api/cases/${caseId}/document-ingestions`, {
       method: "POST",
       body: {
+        ...API_INGEST_DOCUMENT_BODY,
         artifactType: "report",
         title: "Discharge note",
-        contentType: "text/plain",
         filename: "discharge.txt",
         content: "Discharged home after evaluation.\n\nFollow-up with PCP recommended.",
         sourceDate: "2026-03-30",
@@ -141,6 +105,7 @@ test("POST /document-ingestions rejects unsupported content types", async () => 
     const response = await jsonRequest<{ code: string }>(baseUrl, `/api/cases/${caseId}/document-ingestions`, {
       method: "POST",
       body: {
+        ...API_INGEST_DOCUMENT_BODY,
         artifactType: "report",
         title: "Unsupported document",
         contentType: "application/pdf",

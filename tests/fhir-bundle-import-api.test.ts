@@ -1,49 +1,12 @@
 import assert from "node:assert/strict";
-import { once } from "node:events";
-import { createServer } from "node:http";
-import { type AddressInfo } from "node:net";
 import test from "node:test";
-import { bootstrap } from "../src/bootstrap";
-
-async function withServer(
-  run: (baseUrl: string) => Promise<void>,
-  options?: Record<string, unknown>,
-) {
-  const { app } = bootstrap({
-    allowInsecureDevAuth: true,
-    ...(options ?? {}),
-  } as never);
-  const server = createServer(app);
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
-
-  const address = server.address() as AddressInfo;
-  const baseUrl = `http://127.0.0.1:${address.port}`;
-
-  try {
-    await run(baseUrl);
-  } finally {
-    server.close();
-    await once(server, "close");
-  }
-}
-
-async function jsonRequest<T>(
-  baseUrl: string,
-  path: string,
-  options?: { method?: string; body?: unknown },
-): Promise<{ status: number; body: T }> {
-  const response = await fetch(`${baseUrl}${path}`, {
-    method: options?.method ?? "GET",
-    headers: { "content-type": "application/json" },
-    body: options?.body ? JSON.stringify(options.body) : undefined,
-  });
-
-  return {
-    status: response.status,
-    body: (await response.json()) as T,
-  };
-}
+import {
+  API_ADD_ARTIFACT_BODY,
+  fhirCollectionBundle,
+  fhirDocumentBundle,
+  fhirDocumentReferenceResource,
+} from "./fixtures";
+import { jsonRequest, withServer } from "./helpers";
 
 test("POST /fhir-bundle-imports creates multiple artifacts, stales packets, and records a dedicated audit event", async () => {
   await withServer(async (baseUrl) => {
@@ -64,6 +27,7 @@ test("POST /fhir-bundle-imports creates multiple artifacts, stales packets, and 
     await jsonRequest(baseUrl, `/api/cases/${caseId}/artifacts`, {
       method: "POST",
       body: {
+        ...API_ADD_ARTIFACT_BODY,
         artifactType: "summary",
         title: "Manual intake summary",
         summary: "Initial symptoms captured during intake.",
@@ -84,45 +48,31 @@ test("POST /fhir-bundle-imports creates multiple artifacts, stales packets, and 
       method: "POST",
       body: {
         artifactType: "report",
-        resource: {
-          resourceType: "Bundle",
-          type: "document",
-          identifier: { system: "urn:ietf:rfc:3986", value: "urn:uuid:document-bundle-1" },
-          timestamp: "2026-03-30T12:00:00Z",
-          entry: [
-            {
-              resource: {
-                resourceType: "Composition",
-                status: "final",
-              },
+        resource: fhirDocumentBundle([
+          {
+            resource: {
+              resourceType: "Composition",
+              status: "final",
             },
-            {
-              resource: {
-                resourceType: "DocumentReference",
-                status: "current",
-                description: "Discharge note",
-                content: [
-                  {
-                    attachment: {
-                      contentType: "text/plain; charset=UTF-8",
-                      data: Buffer.from(
-                        "Discharged home after evaluation.\n\nFollow-up with PCP recommended.",
-                        "utf8",
-                      ).toString("base64"),
-                    },
-                  },
-                ],
-              },
+          },
+          {
+            resource: fhirDocumentReferenceResource({
+              title: "Discharge note",
+              contentType: "text/plain; charset=UTF-8",
+              data: Buffer.from(
+                "Discharged home after evaluation.\n\nFollow-up with PCP recommended.",
+                "utf8",
+              ).toString("base64"),
+            }),
+          },
+          {
+            resource: {
+              resourceType: "Binary",
+              contentType: "text/markdown",
+              data: Buffer.from("# Visit Note\n\nSymptoms remain stable.", "utf8").toString("base64"),
             },
-            {
-              resource: {
-                resourceType: "Binary",
-                contentType: "text/markdown",
-                data: Buffer.from("# Visit Note\n\nSymptoms remain stable.", "utf8").toString("base64"),
-              },
-            },
-          ],
-        },
+          },
+        ]),
       },
     });
 
@@ -226,26 +176,14 @@ test("POST /fhir-bundle-imports rejects document bundles without the required do
       {
         method: "POST",
         body: {
-          resource: {
-            resourceType: "Bundle",
-            type: "document",
-            entry: [
-              {
-                resource: {
-                  resourceType: "DocumentReference",
-                  status: "current",
-                  content: [
-                    {
-                      attachment: {
-                        contentType: "text/plain",
-                        data: Buffer.from("Bundle body", "utf8").toString("base64"),
-                      },
-                    },
-                  ],
-                },
-              },
-            ],
-          },
+          resource: fhirDocumentBundle([
+            {
+              resource: fhirDocumentReferenceResource({
+                contentType: "text/plain",
+                data: Buffer.from("Bundle body", "utf8").toString("base64"),
+              }),
+            },
+          ]),
         },
       },
     );
@@ -280,27 +218,15 @@ test("POST /fhir-bundle-imports imports url-only attachments when external fetch
         method: "POST",
         body: {
           allowExternalAttachmentFetch: true,
-          resource: {
-            resourceType: "Bundle",
-            type: "collection",
-            entry: [
-              {
-                resource: {
-                  resourceType: "DocumentReference",
-                  status: "current",
-                  description: "Remote discharge note",
-                  content: [
-                    {
-                      attachment: {
-                        contentType: "text/plain",
-                        url: "https://example.test/discharge.txt",
-                      },
-                    },
-                  ],
-                },
-              },
-            ],
-          },
+          resource: fhirCollectionBundle([
+            {
+              resource: fhirDocumentReferenceResource({
+                title: "Remote discharge note",
+                contentType: "text/plain",
+                url: "https://example.test/discharge.txt",
+              }),
+            },
+          ]),
         },
       });
 

@@ -1,44 +1,7 @@
 import assert from "node:assert/strict";
-import { once } from "node:events";
-import { createServer } from "node:http";
-import { type AddressInfo } from "node:net";
 import test from "node:test";
-import { bootstrap } from "../src/bootstrap";
-
-async function withServer(run: (baseUrl: string) => Promise<void>) {
-  const { app } = bootstrap({ allowInsecureDevAuth: true });
-  const server = createServer(app);
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
-
-  const address = server.address() as AddressInfo;
-  const baseUrl = `http://127.0.0.1:${address.port}`;
-
-  try {
-    await run(baseUrl);
-  } finally {
-    server.close();
-    await once(server, "close");
-  }
-}
-
-async function jsonRequest<T>(
-  baseUrl: string,
-  path: string,
-  options?: { method?: string; body?: unknown },
-): Promise<{ status: number; body: T; headers: Headers }> {
-  const response = await fetch(`${baseUrl}${path}`, {
-    method: options?.method ?? "GET",
-    headers: { "content-type": "application/json" },
-    body: options?.body ? JSON.stringify(options.body) : undefined,
-  });
-
-  return {
-    status: response.status,
-    body: (await response.json()) as T,
-    headers: response.headers,
-  };
-}
+import { API_ADD_ARTIFACT_BODY, API_SUBMIT_REVIEW_BODY } from "./fixtures";
+import { jsonRequest, withServer } from "./helpers";
 
 async function createApprovedPacket(baseUrl: string): Promise<{ caseId: string; packetId: string }> {
   const caseResponse = await jsonRequest<{ case: { caseId: string } }>(baseUrl, "/api/cases", {
@@ -58,6 +21,7 @@ async function createApprovedPacket(baseUrl: string): Promise<{ caseId: string; 
   await jsonRequest(baseUrl, `/api/cases/${caseId}/artifacts`, {
     method: "POST",
     body: {
+      ...API_ADD_ARTIFACT_BODY,
       artifactType: "report",
       title: "Initial intake report",
       summary: "Reported dyspnea after mild exertion.",
@@ -81,8 +45,8 @@ async function createApprovedPacket(baseUrl: string): Promise<{ caseId: string; 
     {
       method: "POST",
       body: {
+        ...API_SUBMIT_REVIEW_BODY,
         reviewerName: "Dr. Ada",
-        action: "approved",
         comments: "Ready for explicit sign-off.",
       },
     },
