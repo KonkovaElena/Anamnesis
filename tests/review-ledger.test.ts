@@ -8,6 +8,16 @@ import {
   submitReview,
   type AnamnesisCase,
 } from "../src/domain/anamnesis";
+import {
+  API_CREATE_CASE_BODY,
+  API_SUBMIT_REVIEW_BODY,
+  APPROVED_REVIEW_INPUT,
+  CHANGES_REQUESTED_REVIEW_INPUT,
+  GENERAL_INTAKE_INPUT,
+  LAB_ARTIFACT_INPUT,
+  NOTE_ARTIFACT_INPUT,
+  REJECTED_REVIEW_INPUT,
+} from "./fixtures";
 import { jsonRequest, withServer } from "./helpers";
 
 function seedCaseWithPacket(): {
@@ -15,8 +25,10 @@ function seedCaseWithPacket(): {
   packetId: string;
 } {
   let record = createCase({
+    ...GENERAL_INTAKE_INPUT,
     patientLabel: "review-test",
     intake: {
+      ...GENERAL_INTAKE_INPUT.intake,
       chiefConcern: "Recurring headache",
       symptomSummary: "Headaches have intensified over the past two weeks.",
       historySummary: "No prior neurological workup.",
@@ -25,7 +37,7 @@ function seedCaseWithPacket(): {
   });
 
   record = addArtifact(record, {
-    artifactType: "note",
+    ...NOTE_ARTIFACT_INPUT,
     title: "Initial triage note",
     summary: "Patient reported onset approximately two weeks ago.",
   });
@@ -44,8 +56,8 @@ function seedCaseWithPacket(): {
 test("submitReview creates a review entry and transitions packet to CLINICIAN_APPROVED", () => {
   const { record, packetId } = seedCaseWithPacket();
   const { nextCase, review } = submitReview(record, packetId, {
+    ...APPROVED_REVIEW_INPUT,
     reviewerName: "Dr. Ada",
-    action: "approved",
     comments: "Looks correct. Proceed with MRI referral.",
   });
 
@@ -63,8 +75,8 @@ test("submitReview creates a review entry and transitions packet to CLINICIAN_AP
 test("submitReview transitions packet to CHANGES_REQUESTED", () => {
   const { record, packetId } = seedCaseWithPacket();
   const { nextCase } = submitReview(record, packetId, {
+    ...CHANGES_REQUESTED_REVIEW_INPUT,
     reviewerName: "Dr. Babbage",
-    action: "changes_requested",
     comments: "Please add the lab panel before proceeding.",
   });
 
@@ -75,8 +87,8 @@ test("submitReview transitions packet to CHANGES_REQUESTED", () => {
 test("submitReview transitions packet to REJECTED", () => {
   const { record, packetId } = seedCaseWithPacket();
   const { nextCase } = submitReview(record, packetId, {
+    ...REJECTED_REVIEW_INPUT,
     reviewerName: "Dr. Curie",
-    action: "rejected",
     comments: "Insufficient evidence for triage.",
   });
 
@@ -87,8 +99,9 @@ test("submitReview transitions packet to REJECTED", () => {
 test("submitReview allows comments to be omitted", () => {
   const { record, packetId } = seedCaseWithPacket();
   const { review } = submitReview(record, packetId, {
+    ...APPROVED_REVIEW_INPUT,
     reviewerName: "Dr. Darwin",
-    action: "approved",
+    comments: undefined,
   });
 
   assert.equal(review.comments, undefined);
@@ -97,15 +110,15 @@ test("submitReview allows comments to be omitted", () => {
 test("submitReview rejects review on an already-approved packet", () => {
   const { record, packetId } = seedCaseWithPacket();
   const { nextCase } = submitReview(record, packetId, {
+    ...APPROVED_REVIEW_INPUT,
     reviewerName: "Dr. Euler",
-    action: "approved",
   });
 
   assert.throws(
     () =>
       submitReview(nextCase, packetId, {
+        ...CHANGES_REQUESTED_REVIEW_INPUT,
         reviewerName: "Dr. Fermat",
-        action: "changes_requested",
       }),
     (error: Error & { code?: string }) => {
       assert.equal(error.code, "packet_already_approved");
@@ -117,8 +130,8 @@ test("submitReview rejects review on an already-approved packet", () => {
 test("submitReview rejects review on a finalized packet", () => {
   const { record, packetId } = seedCaseWithPacket();
   const approved = submitReview(record, packetId, {
+    ...APPROVED_REVIEW_INPUT,
     reviewerName: "Dr. Noether",
-    action: "approved",
   });
   const finalized = finalizePhysicianPacket(approved.nextCase, packetId, {
     finalizedBy: "Dr. Noether",
@@ -127,8 +140,8 @@ test("submitReview rejects review on a finalized packet", () => {
   assert.throws(
     () =>
       submitReview(finalized.nextCase, packetId, {
+        ...CHANGES_REQUESTED_REVIEW_INPUT,
         reviewerName: "Dr. Turing",
-        action: "changes_requested",
       }),
     (error: Error & { code?: string }) => {
       assert.equal(error.code, "packet_already_finalized");
@@ -140,14 +153,14 @@ test("submitReview rejects review on a finalized packet", () => {
 test("submitReview allows multiple reviews on a changes_requested packet", () => {
   const { record, packetId } = seedCaseWithPacket();
   const first = submitReview(record, packetId, {
+    ...CHANGES_REQUESTED_REVIEW_INPUT,
     reviewerName: "Dr. Gauss",
-    action: "changes_requested",
     comments: "Need more context on the pain location.",
   });
 
   const second = submitReview(first.nextCase, packetId, {
+    ...APPROVED_REVIEW_INPUT,
     reviewerName: "Dr. Hilbert",
-    action: "approved",
     comments: "Now looks complete.",
   });
 
@@ -161,8 +174,8 @@ test("submitReview throws when packet does not exist", () => {
   assert.throws(
     () =>
       submitReview(record, "nonexistent-packet-id", {
+        ...APPROVED_REVIEW_INPUT,
         reviewerName: "Dr. Klein",
-        action: "approved",
       }),
     (error: Error & { code?: string }) => {
       assert.equal(error.code, "packet_not_found");
@@ -185,8 +198,10 @@ async function createCaseWithPacket(baseUrl: string) {
   const caseResponse = await jsonRequest<{ case: { caseId: string } }>(baseUrl, "/api/cases", {
     method: "POST",
     body: {
+      ...API_CREATE_CASE_BODY,
       patientLabel: "api-review-test",
       intake: {
+        ...API_CREATE_CASE_BODY.intake,
         chiefConcern: "Chronic fatigue",
         symptomSummary: "Persistent fatigue lasting over three weeks.",
         historySummary: "Recent blood panel was unremarkable.",
@@ -199,7 +214,7 @@ async function createCaseWithPacket(baseUrl: string) {
   await jsonRequest(baseUrl, `/api/cases/${caseId}/artifacts`, {
     method: "POST",
     body: {
-      artifactType: "lab",
+      ...LAB_ARTIFACT_INPUT,
       title: "Complete blood panel",
       summary: "All markers within normal range.",
       sourceDate: "2026-03-30",
@@ -225,8 +240,8 @@ test("POST review returns 201 and the created review entry", async () => {
     }>(baseUrl, `/api/cases/${caseId}/physician-packets/${packetId}/reviews`, {
       method: "POST",
       body: {
+        ...API_SUBMIT_REVIEW_BODY,
         reviewerName: "Dr. Lovelace",
-        action: "approved",
         comments: "Evidence is sufficient.",
       },
     });
@@ -245,12 +260,20 @@ test("GET reviews returns the ledger for a specific packet", async () => {
 
     await jsonRequest(baseUrl, `/api/cases/${caseId}/physician-packets/${packetId}/reviews`, {
       method: "POST",
-      body: { reviewerName: "Dr. Maxwell", action: "changes_requested", comments: "Add imaging." },
+      body: {
+        ...CHANGES_REQUESTED_REVIEW_INPUT,
+        reviewerName: "Dr. Maxwell",
+        comments: "Add imaging.",
+      },
     });
 
     await jsonRequest(baseUrl, `/api/cases/${caseId}/physician-packets/${packetId}/reviews`, {
       method: "POST",
-      body: { reviewerName: "Dr. Newton", action: "approved" },
+      body: {
+        ...API_SUBMIT_REVIEW_BODY,
+        reviewerName: "Dr. Newton",
+        comments: undefined,
+      },
     });
 
     const response = await jsonRequest<{
@@ -274,7 +297,10 @@ test("POST review returns 404 for a non-existent case", async () => {
       "/api/cases/no-such-case/physician-packets/no-packet/reviews",
       {
         method: "POST",
-        body: { reviewerName: "Dr. Planck", action: "approved" },
+        body: {
+          ...API_SUBMIT_REVIEW_BODY,
+          reviewerName: "Dr. Planck",
+        },
       },
     );
 
@@ -288,8 +314,10 @@ test("POST review returns 404 for a non-existent packet", async () => {
     const caseResponse = await jsonRequest<{ case: { caseId: string } }>(baseUrl, "/api/cases", {
       method: "POST",
       body: {
+        ...API_CREATE_CASE_BODY,
         patientLabel: "packet-404-test",
         intake: {
+          ...API_CREATE_CASE_BODY.intake,
           chiefConcern: "Test concern",
           symptomSummary: "Test symptom.",
           historySummary: "Test history.",
@@ -303,7 +331,10 @@ test("POST review returns 404 for a non-existent packet", async () => {
       `/api/cases/${caseResponse.body.case.caseId}/physician-packets/nonexistent/reviews`,
       {
         method: "POST",
-        body: { reviewerName: "Dr. Riemann", action: "approved" },
+        body: {
+          ...API_SUBMIT_REVIEW_BODY,
+          reviewerName: "Dr. Riemann",
+        },
       },
     );
 
@@ -321,7 +352,11 @@ test("POST review rejects invalid action values", async () => {
       `/api/cases/${caseId}/physician-packets/${packetId}/reviews`,
       {
         method: "POST",
-        body: { reviewerName: "Dr. Turing", action: "maybe" },
+        body: {
+          ...API_SUBMIT_REVIEW_BODY,
+          reviewerName: "Dr. Turing",
+          action: "maybe",
+        },
       },
     );
 
@@ -354,7 +389,10 @@ test("POST review returns 409 when the packet is already approved", async () => 
 
     await jsonRequest(baseUrl, `/api/cases/${caseId}/physician-packets/${packetId}/reviews`, {
       method: "POST",
-      body: { reviewerName: "Dr. Watt", action: "approved" },
+      body: {
+        ...API_SUBMIT_REVIEW_BODY,
+        reviewerName: "Dr. Watt",
+      },
     });
 
     const response = await jsonRequest<{ code: string }>(
@@ -362,7 +400,11 @@ test("POST review returns 409 when the packet is already approved", async () => 
       `/api/cases/${caseId}/physician-packets/${packetId}/reviews`,
       {
         method: "POST",
-        body: { reviewerName: "Dr. Young", action: "changes_requested" },
+        body: {
+          ...CHANGES_REQUESTED_REVIEW_INPUT,
+          reviewerName: "Dr. Young",
+          comments: undefined,
+        },
       },
     );
 
@@ -376,8 +418,10 @@ test("GET reviews returns 404 for a non-existent packet", async () => {
     const caseResponse = await jsonRequest<{ case: { caseId: string } }>(baseUrl, "/api/cases", {
       method: "POST",
       body: {
+        ...API_CREATE_CASE_BODY,
         patientLabel: "get-reviews-404",
         intake: {
+          ...API_CREATE_CASE_BODY.intake,
           chiefConcern: "Test",
           symptomSummary: "Test.",
           historySummary: "Test.",
@@ -402,7 +446,10 @@ test("reviews metric appears in /metrics output after a review is submitted", as
 
     await jsonRequest(baseUrl, `/api/cases/${caseId}/physician-packets/${packetId}/reviews`, {
       method: "POST",
-      body: { reviewerName: "Dr. Zeno", action: "approved" },
+      body: {
+        ...API_SUBMIT_REVIEW_BODY,
+        reviewerName: "Dr. Zeno",
+      },
     });
 
     const metricsResponse = await fetch(`${baseUrl}/metrics`);
