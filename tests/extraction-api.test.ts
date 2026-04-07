@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import {
+  IMAGING_ARTIFACT_INPUT,
+  LAB_ARTIFACT_INPUT,
+  SUMMARY_ARTIFACT_INPUT,
+  TUMOR_RNA_SAMPLE_INPUT,
+} from "./fixtures";
 import { jsonRequest, withServer } from "./helpers";
 
 test("POST /api/cases accepts workflowFamily and sample registration enriches packet drafts", async () => {
@@ -29,13 +35,7 @@ test("POST /api/cases accepts workflowFamily and sample registration enriches pa
       case: { samples: Array<{ sampleId: string; sampleType: string; assayType: string }> };
     }>(baseUrl, `/api/cases/${caseId}/samples`, {
       method: "POST",
-      body: {
-        sampleId: "sample-rna-01",
-        sampleType: "TUMOR_RNA",
-        assayType: "RNA_SEQ",
-        accessionId: "ACC-RNA-01",
-        sourceSite: "oncology-lab",
-      },
+      body: TUMOR_RNA_SAMPLE_INPUT,
     });
 
     assert.equal(sampleResponse.status, 201);
@@ -45,7 +45,7 @@ test("POST /api/cases accepts workflowFamily and sample registration enriches pa
     await jsonRequest(baseUrl, `/api/cases/${caseId}/artifacts`, {
       method: "POST",
       body: {
-        artifactType: "summary",
+        ...SUMMARY_ARTIFACT_INPUT,
         title: "Tumor RNA ingest bundle",
         summary: "FASTQ bundle registered for board review.",
       },
@@ -102,7 +102,7 @@ test("POST /api/cases/:caseId/study-context and /qc-summary enrich MRI packet dr
     await jsonRequest(baseUrl, `/api/cases/${caseId}/artifacts`, {
       method: "POST",
       body: {
-        artifactType: "imaging-summary",
+        ...IMAGING_ARTIFACT_INPUT,
         title: "Imported MRI study summary",
         summary: "Axial and sagittal sequences available for second-opinion review.",
       },
@@ -242,26 +242,14 @@ test("POST /api/cases/:caseId/samples rejects duplicate sample ids", async () =>
 
     await jsonRequest(baseUrl, `/api/cases/${caseId}/samples`, {
       method: "POST",
-      body: {
-        sampleId: "sample-rna-01",
-        sampleType: "TUMOR_RNA",
-        assayType: "RNA_SEQ",
-        accessionId: "ACC-RNA-01",
-        sourceSite: "oncology-lab",
-      },
+      body: TUMOR_RNA_SAMPLE_INPUT,
     });
 
     const duplicateResponse = await jsonRequest<{
       code: string;
     }>(baseUrl, `/api/cases/${caseId}/samples`, {
       method: "POST",
-      body: {
-        sampleId: "sample-rna-01",
-        sampleType: "TUMOR_RNA",
-        assayType: "RNA_SEQ",
-        accessionId: "ACC-RNA-01",
-        sourceSite: "oncology-lab",
-      },
+      body: TUMOR_RNA_SAMPLE_INPUT,
     });
 
     assert.equal(duplicateResponse.status, 409);
@@ -292,7 +280,7 @@ test("POST /api/cases/:caseId/artifacts accepts derived artifact metadata and pa
     }>(baseUrl, `/api/cases/${caseId}/artifacts`, {
       method: "POST",
       body: {
-        artifactType: "lab",
+        ...LAB_ARTIFACT_INPUT,
         artifactClass: "SOURCE",
         semanticType: "lab-panel",
         artifactHash: "sha256:source",
@@ -363,7 +351,7 @@ test("GET /api/cases/:caseId/evidence-lineage returns graph structure and artifa
     }>(baseUrl, `/api/cases/${caseId}/artifacts`, {
       method: "POST",
       body: {
-        artifactType: "lab",
+        ...LAB_ARTIFACT_INPUT,
         artifactClass: "SOURCE",
         semanticType: "lab-panel",
         title: "Primary lab panel",
