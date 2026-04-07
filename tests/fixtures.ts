@@ -291,6 +291,26 @@ export const API_CHEST_DISCOMFORT_CASE_BODY = {
   },
 };
 
+export const API_AUDIT_FLOW_DYSPNEA_CASE_BODY = {
+  patientLabel: "audit-flow",
+  intake: {
+    chiefConcern: "Shortness of breath",
+    symptomSummary: "Symptoms persist after exertion.",
+    historySummary: "No recent imaging recorded.",
+    questionsForClinician: ["Should chest imaging be prioritized?"],
+  },
+};
+
+export const API_AUDIT_CORRELATION_FATIGUE_CASE_BODY = {
+  patientLabel: "correlation-check",
+  intake: {
+    chiefConcern: "Fatigue",
+    symptomSummary: "Persistent fatigue after ordinary activity.",
+    historySummary: "No prior cardiology workup in the record.",
+    questionsForClinician: ["What follow-up tests are appropriate?"],
+  },
+};
+
 export const API_ADD_ARTIFACT_BODY = {
   artifactType: "summary",
   title: "Test artifact",

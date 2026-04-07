@@ -1,20 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { API_ADD_ARTIFACT_BODY, API_SUBMIT_REVIEW_BODY } from "./fixtures";
+import {
+  API_ADD_ARTIFACT_BODY,
+  API_AUDIT_CORRELATION_FATIGUE_CASE_BODY,
+  API_AUDIT_FLOW_DYSPNEA_CASE_BODY,
+  API_SUBMIT_REVIEW_BODY,
+} from "./fixtures";
 import { jsonRequest, withServer } from "./helpers";
 
 async function createApprovedPacket(baseUrl: string): Promise<{ caseId: string; packetId: string }> {
   const caseResponse = await jsonRequest<{ case: { caseId: string } }>(baseUrl, "/api/cases", {
     method: "POST",
-    body: {
-      patientLabel: "audit-flow",
-      intake: {
-        chiefConcern: "Shortness of breath",
-        symptomSummary: "Symptoms persist after exertion.",
-        historySummary: "No recent imaging recorded.",
-        questionsForClinician: ["Should chest imaging be prioritized?"],
-      },
-    },
+    body: API_AUDIT_FLOW_DYSPNEA_CASE_BODY,
   });
   const caseId = caseResponse.body.case.caseId;
 
@@ -96,15 +93,7 @@ test("audit events keep the originating request correlation id", async () => {
   await withServer(async (baseUrl) => {
     const caseResponse = await jsonRequest<{ case: { caseId: string } }>(baseUrl, "/api/cases", {
       method: "POST",
-      body: {
-        patientLabel: "correlation-check",
-        intake: {
-          chiefConcern: "Fatigue",
-          symptomSummary: "Persistent fatigue after ordinary activity.",
-          historySummary: "No prior cardiology workup in the record.",
-          questionsForClinician: ["What follow-up tests are appropriate?"],
-        },
-      },
+      body: API_AUDIT_CORRELATION_FATIGUE_CASE_BODY,
     });
 
     const caseId = caseResponse.body.case.caseId;
