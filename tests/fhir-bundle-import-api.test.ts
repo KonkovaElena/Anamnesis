@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   API_ADD_ARTIFACT_BODY,
+  API_CHEST_DISCOMFORT_CASE_BODY,
+  API_FATIGUE_CASE_BODY,
   fhirCollectionBundle,
   fhirDocumentBundle,
   fhirDocumentReferenceResource,
@@ -13,13 +15,8 @@ test("POST /fhir-bundle-imports creates multiple artifacts, stales packets, and 
     const caseResponse = await jsonRequest<{ case: { caseId: string } }>(baseUrl, "/api/cases", {
       method: "POST",
       body: {
+        ...API_CHEST_DISCOMFORT_CASE_BODY,
         patientLabel: "fhir-bundle-api-case",
-        intake: {
-          chiefConcern: "Chest discomfort",
-          symptomSummary: "Intermittent discomfort after exercise.",
-          historySummary: "Urgent-care discharge paperwork exists.",
-          questionsForClinician: ["Should ECG records be reviewed?"],
-        },
       },
     });
     const caseId = caseResponse.body.case.caseId;
@@ -124,14 +121,7 @@ test("POST /fhir-bundle-imports rejects unsupported bundle types", async () => {
   await withServer(async (baseUrl) => {
     const caseResponse = await jsonRequest<{ case: { caseId: string } }>(baseUrl, "/api/cases", {
       method: "POST",
-      body: {
-        intake: {
-          chiefConcern: "Fatigue",
-          symptomSummary: "Persistent fatigue for one week.",
-          historySummary: "No recent illness.",
-          questionsForClinician: [],
-        },
-      },
+      body: API_FATIGUE_CASE_BODY,
     });
     const caseId = caseResponse.body.case.caseId;
 
@@ -159,14 +149,7 @@ test("POST /fhir-bundle-imports rejects document bundles without the required do
   await withServer(async (baseUrl) => {
     const caseResponse = await jsonRequest<{ case: { caseId: string } }>(baseUrl, "/api/cases", {
       method: "POST",
-      body: {
-        intake: {
-          chiefConcern: "Fatigue",
-          symptomSummary: "Persistent fatigue for one week.",
-          historySummary: "No recent illness.",
-          questionsForClinician: [],
-        },
-      },
+      body: API_FATIGUE_CASE_BODY,
     });
     const caseId = caseResponse.body.case.caseId;
 
@@ -200,14 +183,7 @@ test("POST /fhir-bundle-imports imports url-only attachments when external fetch
     async (baseUrl) => {
       const caseResponse = await jsonRequest<{ case: { caseId: string } }>(baseUrl, "/api/cases", {
         method: "POST",
-        body: {
-          intake: {
-            chiefConcern: "Fatigue",
-            symptomSummary: "Persistent fatigue for one week.",
-            historySummary: "No recent illness.",
-            questionsForClinician: [],
-          },
-        },
+        body: API_FATIGUE_CASE_BODY,
       });
       const caseId = caseResponse.body.case.caseId;
 

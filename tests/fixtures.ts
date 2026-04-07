@@ -272,6 +272,25 @@ export const API_CREATE_CASE_BODY = {
   },
 };
 
+export const API_FATIGUE_CASE_BODY = {
+  intake: {
+    chiefConcern: "Fatigue",
+    symptomSummary: "Persistent fatigue for one week.",
+    historySummary: "No recent illness.",
+    questionsForClinician: [],
+  },
+};
+
+export const API_CHEST_DISCOMFORT_CASE_BODY = {
+  patientLabel: "fhir-api-case",
+  intake: {
+    chiefConcern: "Chest discomfort",
+    symptomSummary: "Intermittent discomfort after exercise.",
+    historySummary: "Urgent-care discharge paperwork exists.",
+    questionsForClinician: ["Should ECG records be reviewed?"],
+  },
+};
+
 export const API_ADD_ARTIFACT_BODY = {
   artifactType: "summary",
   title: "Test artifact",
