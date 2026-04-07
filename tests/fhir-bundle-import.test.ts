@@ -7,6 +7,12 @@ import {
   draftPhysicianPacket,
   type AnamnesisCase,
 } from "../src/domain/anamnesis";
+import {
+  fhirBinaryResource,
+  fhirCollectionBundle,
+  fhirDocumentBundle,
+  fhirDocumentReferenceResource,
+} from "./fixtures";
 
 interface FhirBundleImportInputView {
   artifactType?: "note" | "lab" | "summary" | "report" | "imaging-summary";
@@ -93,43 +99,28 @@ test("ingestFhirBundle imports supported document bundle entries into bounded ar
 
   const result = await ingestFhirBundle(record, {
     artifactType: "report",
-    resource: {
-      resourceType: "Bundle",
-      type: "document",
-      identifier: { system: "urn:ietf:rfc:3986", value: "urn:uuid:document-bundle-1" },
-      timestamp: "2026-03-30T12:00:00Z",
-      entry: [
-        {
-          resource: {
-            resourceType: "Composition",
-            status: "final",
-          },
+    resource: fhirDocumentBundle([
+      {
+        resource: {
+          resourceType: "Composition",
+          status: "final",
         },
-        {
-          resource: {
-            resourceType: "DocumentReference",
-            status: "current",
-            description: "ED discharge note",
-            date: "2026-03-30T12:00:00Z",
-            content: [
-              {
-                attachment: {
-                  contentType: "text/plain; charset=UTF-8",
-                  data: Buffer.from("  First line.\r\n\r\n Second   line here.  ", "utf8").toString("base64"),
-                },
-              },
-            ],
-          },
-        },
-        {
-          resource: {
-            resourceType: "Binary",
-            contentType: "text/markdown; charset=UTF-8",
-            data: Buffer.from("# Visit Note\n\nSymptoms remain stable.", "utf8").toString("base64"),
-          },
-        },
-      ],
-    },
+      },
+      {
+        resource: fhirDocumentReferenceResource({
+          title: "ED discharge note",
+          date: "2026-03-30T12:00:00Z",
+          contentType: "text/plain; charset=UTF-8",
+          data: Buffer.from("  First line.\r\n\r\n Second   line here.  ", "utf8").toString("base64"),
+        }),
+      },
+      {
+        resource: fhirBinaryResource(
+          Buffer.from("# Visit Note\n\nSymptoms remain stable.", "utf8").toString("base64"),
+          "text/markdown; charset=UTF-8",
+        ),
+      },
+    ]),
   });
 
   assert.equal(result.artifacts.length, 2);
@@ -200,28 +191,14 @@ test("ingestFhirBundle rejects document bundles without a Composition as the fir
   await assert.rejects(
     () =>
       ingestFhirBundle(record, {
-        resource: {
-          resourceType: "Bundle",
-          type: "document",
-          identifier: { system: "urn:ietf:rfc:3986", value: "urn:uuid:bundle-1" },
-          timestamp: "2026-04-05T09:00:00Z",
-          entry: [
-            {
-              resource: {
-                resourceType: "DocumentReference",
-                status: "current",
-                content: [
-                  {
-                    attachment: {
-                      contentType: "text/plain",
-                      data: Buffer.from("Bundle body", "utf8").toString("base64"),
-                    },
-                  },
-                ],
-              },
-            },
-          ],
-        },
+        resource: fhirDocumentBundle([
+          {
+            resource: fhirDocumentReferenceResource({
+              contentType: "text/plain",
+              data: Buffer.from("Bundle body", "utf8").toString("base64"),
+            }),
+          },
+        ]),
       }),
     (error: unknown) => {
       assert.ok(error instanceof AnamnesisDomainError);
@@ -331,26 +308,14 @@ test("ingestFhirBundle rejects url-only DocumentReference entries when external 
   await assert.rejects(
     () =>
       ingestFhirBundle(record, {
-        resource: {
-          resourceType: "Bundle",
-          type: "collection",
-          entry: [
-            {
-              resource: {
-                resourceType: "DocumentReference",
-                status: "current",
-                content: [
-                  {
-                    attachment: {
-                      contentType: "text/plain",
-                      url: "https://example.test/discharge.txt",
-                    },
-                  },
-                ],
-              },
-            },
-          ],
-        },
+        resource: fhirCollectionBundle([
+          {
+            resource: fhirDocumentReferenceResource({
+              contentType: "text/plain",
+              url: "https://example.test/discharge.txt",
+            }),
+          },
+        ]),
       }),
     (error: unknown) => {
       assert.ok(error instanceof AnamnesisDomainError);
@@ -384,27 +349,15 @@ test("ingestFhirBundle dereferences url-only attachments when external fetch is 
     record,
     {
       allowExternalAttachmentFetch: true,
-      resource: {
-        resourceType: "Bundle",
-        type: "collection",
-        entry: [
-          {
-            resource: {
-              resourceType: "DocumentReference",
-              status: "current",
-              description: "Remote discharge note",
-              content: [
-                {
-                  attachment: {
-                    contentType: "text/plain",
-                    url: "https://example.test/discharge.txt",
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
+      resource: fhirCollectionBundle([
+        {
+          resource: fhirDocumentReferenceResource({
+            title: "Remote discharge note",
+            contentType: "text/plain",
+            url: "https://example.test/discharge.txt",
+          }),
+        },
+      ]),
     },
     { externalAttachmentFetcher },
   );

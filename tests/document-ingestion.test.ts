@@ -6,6 +6,12 @@ import {
   draftPhysicianPacket,
   type AnamnesisCase,
 } from "../src/domain/anamnesis";
+import {
+  GENERAL_INTAKE_INPUT,
+  MARKDOWN_DOCUMENT,
+  PLAIN_TEXT_DOCUMENT,
+  SUMMARY_ARTIFACT_INPUT,
+} from "./fixtures";
 
 interface IngestDocumentInputView {
   artifactType: "note" | "lab" | "summary" | "report" | "imaging-summary";
@@ -57,7 +63,7 @@ function seedPacketCase(): AnamnesisCase {
   });
 
   record = addArtifact(record, {
-    artifactType: "summary",
+    ...SUMMARY_ARTIFACT_INPUT,
     title: "Manual intake summary",
     summary: "Initial symptoms were entered manually.",
     sourceDate: "2026-03-28",
@@ -75,9 +81,9 @@ test("ingestDocument normalizes bounded text into an artifact and marks packets 
   const record = seedPacketCase();
 
   const result = ingestDocument(record, {
+    ...PLAIN_TEXT_DOCUMENT,
     artifactType: "report",
     title: "ED discharge note",
-    contentType: "text/plain",
     filename: "ed-discharge.txt",
     content: "  First line.\r\n\r\n   Second    line   with  gaps.  \r\nThird line.  ",
     sourceDate: "2026-03-30",
@@ -96,19 +102,14 @@ test("ingestDocument normalizes bounded text into an artifact and marks packets 
 test("ingestDocument truncates oversized normalized content into a bounded excerpt", async () => {
   const ingestDocument = await loadIngestDocument();
   const record = createCase({
-    intake: {
-      chiefConcern: "Headache",
-      symptomSummary: "Severe headache persists.",
-      historySummary: "No known trauma.",
-      questionsForClinician: [],
-    },
+    intake: GENERAL_INTAKE_INPUT.intake,
   });
 
   const content = `${"word ".repeat(1200)}tail`;
   const result = ingestDocument(record, {
+    ...MARKDOWN_DOCUMENT,
     artifactType: "note",
     title: "Long note",
-    contentType: "text/markdown",
     content,
   });
 

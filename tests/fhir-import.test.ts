@@ -7,6 +7,10 @@ import {
   draftPhysicianPacket,
   type AnamnesisCase,
 } from "../src/domain/anamnesis";
+import {
+  fhirBinaryResource,
+  fhirDocumentReferenceResource,
+} from "./fixtures";
 
 interface FhirImportInputView {
   artifactType?: "note" | "lab" | "summary" | "report" | "imaging-summary";
@@ -85,20 +89,12 @@ test("ingestFhirResource imports an inline DocumentReference into a bounded arti
 
   const result = ingestFhirResource(record, {
     artifactType: "report",
-    resource: {
-      resourceType: "DocumentReference",
-      status: "current",
-      description: "ED discharge note",
+    resource: fhirDocumentReferenceResource({
+      title: "ED discharge note",
       date: "2026-03-30T12:00:00Z",
-      content: [
-        {
-          attachment: {
-            contentType: "text/plain; charset=UTF-8",
-            data: Buffer.from("  First line.\r\n\r\n Second   line here.  ", "utf8").toString("base64"),
-          },
-        },
-      ],
-    },
+      contentType: "text/plain; charset=UTF-8",
+      data: Buffer.from("  First line.\r\n\r\n Second   line here.  ", "utf8").toString("base64"),
+    }),
   });
 
   assert.equal(result.artifact.title, "ED discharge note");
@@ -131,11 +127,10 @@ test("ingestFhirResource imports an inline Binary resource with text markdown co
   const result = ingestFhirResource(record, {
     artifactType: "note",
     title: "Imported markdown note",
-    resource: {
-      resourceType: "Binary",
-      contentType: "text/markdown; charset=UTF-8",
-      data: Buffer.from("# Visit Note\n\nSymptoms remain stable.", "utf8").toString("base64"),
-    },
+    resource: fhirBinaryResource(
+      Buffer.from("# Visit Note\n\nSymptoms remain stable.", "utf8").toString("base64"),
+      "text/markdown; charset=UTF-8",
+    ),
   });
 
   assert.equal(result.artifact.title, "Imported markdown note");
@@ -162,18 +157,10 @@ test("ingestFhirResource rejects DocumentReference imports that only expose exte
   assert.throws(
     () =>
       ingestFhirResource(record, {
-        resource: {
-          resourceType: "DocumentReference",
-          status: "current",
-          content: [
-            {
-              attachment: {
-                contentType: "text/plain",
-                url: "https://example.test/discharge.txt",
-              },
-            },
-          ],
-        },
+        resource: fhirDocumentReferenceResource({
+          contentType: "text/plain",
+          url: "https://example.test/discharge.txt",
+        }),
       }),
     (error: unknown) => {
       assert.ok(error instanceof AnamnesisDomainError);

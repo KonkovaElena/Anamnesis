@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { API_INGEST_DOCUMENT_BODY } from "./fixtures";
+import { API_CREATE_CASE_BODY, API_INGEST_DOCUMENT_BODY } from "./fixtures";
 import { jsonRequest, withServer } from "./helpers";
 
 test("POST /document-ingestions creates a bounded artifact, stales packets, and records a dedicated audit event", async () => {
@@ -9,12 +9,7 @@ test("POST /document-ingestions creates a bounded artifact, stales packets, and 
       method: "POST",
       body: {
         patientLabel: "ingestion-api-case",
-        intake: {
-          chiefConcern: "Chest discomfort",
-          symptomSummary: "Intermittent discomfort after exercise.",
-          historySummary: "Urgent-care discharge paperwork exists.",
-          questionsForClinician: ["Should ECG records be reviewed?"],
-        },
+        ...API_CREATE_CASE_BODY,
       },
     });
     const caseId = caseResponse.body.case.caseId;
@@ -91,14 +86,7 @@ test("POST /document-ingestions rejects unsupported content types", async () => 
   await withServer(async (baseUrl) => {
     const caseResponse = await jsonRequest<{ case: { caseId: string } }>(baseUrl, "/api/cases", {
       method: "POST",
-      body: {
-        intake: {
-          chiefConcern: "Fatigue",
-          symptomSummary: "Persistent fatigue for one week.",
-          historySummary: "No recent illness.",
-          questionsForClinician: [],
-        },
-      },
+      body: API_CREATE_CASE_BODY,
     });
     const caseId = caseResponse.body.case.caseId;
 
