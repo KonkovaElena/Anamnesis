@@ -13,32 +13,27 @@ import {
   stableClinicalReviewSignature,
   toAuditContext,
 } from "../src/domain/anamnesis";
+import {
+  GENERAL_INTAKE_INPUT,
+  IMAGING_ARTIFACT_INPUT,
+  LAB_ARTIFACT_INPUT,
+  MRI_SECOND_OPINION_INPUT,
+  MRNA_BOARD_REVIEW_INPUT,
+  RNA_FASTQ_ARTIFACT_INPUT,
+  SUMMARY_ARTIFACT_INPUT,
+  TUMOR_RNA_SAMPLE_INPUT,
+} from "./fixtures";
 
 test("mRNA extraction surfaces enrich packet drafts with workflow family and registered samples", () => {
   let record = createCase({
-    workflowFamily: "MRNA_BOARD_REVIEW",
+    ...MRNA_BOARD_REVIEW_INPUT,
     patientLabel: "mrna-case",
-    intake: {
-      chiefConcern: "Treatment planning support",
-      symptomSummary: "Escalation to board review after molecular workup.",
-      historySummary: "Prior pathology and sequencing intake completed.",
-      questionsForClinician: ["Is board-ready evidence complete?"],
-    },
   });
 
-  record = registerSample(record, {
-    sampleId: "sample-rna-01",
-    sampleType: "TUMOR_RNA",
-    assayType: "RNA_SEQ",
-    accessionId: "ACC-RNA-01",
-    sourceSite: "oncology-lab",
-  });
+  record = registerSample(record, TUMOR_RNA_SAMPLE_INPUT);
 
   record = addArtifact(record, {
-    artifactType: "summary",
-    artifactClass: "SOURCE",
-    semanticType: "tumor-rna-fastq",
-    sampleId: "sample-rna-01",
+    ...RNA_FASTQ_ARTIFACT_INPUT,
     title: "Tumor RNA ingest bundle",
     summary: "FASTQ bundle registered for board review.",
   });
@@ -58,20 +53,12 @@ test("mRNA extraction surfaces enrich packet drafts with workflow family and reg
 
 test("MRI extraction surfaces add imaging study and QC summaries to packet drafts", () => {
   let record = createCase({
-    workflowFamily: "MRI_SECOND_OPINION",
+    ...MRI_SECOND_OPINION_INPUT,
     patientLabel: "mri-case",
-    intake: {
-      chiefConcern: "MRI second opinion requested",
-      symptomSummary: "Outside radiology report flagged uncertain white-matter changes.",
-      historySummary: "Neurology requested an additional read before escalation.",
-      questionsForClinician: ["Does the study require repeat imaging?"],
-    },
   });
 
   record = addArtifact(record, {
-    artifactType: "imaging-summary",
-    artifactClass: "SOURCE",
-    semanticType: "imaging-study",
+    ...IMAGING_ARTIFACT_INPUT,
     title: "Imported MRI study summary",
     summary: "Axial and sagittal sequences available for second-opinion review.",
   });
@@ -124,6 +111,7 @@ test("MRI extraction surfaces add imaging study and QC summaries to packet draft
 
 test("derived artifact metadata and lineage graph survive extraction into Anamnesis", () => {
   let record = createCase({
+    ...GENERAL_INTAKE_INPUT,
     intake: {
       chiefConcern: "Evidence lineage test",
       symptomSummary: "Checking derived-artifact traceability.",
@@ -133,18 +121,20 @@ test("derived artifact metadata and lineage graph survive extraction into Anamne
   });
 
   record = addArtifact(record, {
-    artifactType: "lab",
+    ...LAB_ARTIFACT_INPUT,
     artifactClass: "SOURCE",
     semanticType: "lab-panel",
     artifactHash: "sha256:source",
     title: "Baseline lab panel",
     summary: "Source evidence for downstream synthesis.",
+    sourceDate: undefined,
   });
 
   const sourceArtifact = record.artifacts[0];
   assert.ok(sourceArtifact, "expected source artifact");
 
   record = addArtifact(record, {
+    ...SUMMARY_ARTIFACT_INPUT,
     artifactType: "report",
     artifactClass: "DERIVED",
     semanticType: "board-evidence-bundle",
@@ -197,7 +187,7 @@ test("review signatures and audit identity helpers remain deterministic", () => 
 
 test("recordQcSummary requires study context before MRI QC evidence can be stored", () => {
   const record = createCase({
-    workflowFamily: "MRI_SECOND_OPINION",
+    ...MRI_SECOND_OPINION_INPUT,
     intake: {
       chiefConcern: "QC gating",
       symptomSummary: "QC should require an imaging study.",

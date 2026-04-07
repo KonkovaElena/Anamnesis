@@ -7,6 +7,13 @@ import {
   submitReview,
   type AnamnesisCase,
 } from "../src/domain/anamnesis";
+import {
+  APPROVED_REVIEW_INPUT,
+  GENERAL_INTAKE_INPUT,
+  LAB_ARTIFACT_INPUT,
+  NOTE_ARTIFACT_INPUT,
+  SUMMARY_ARTIFACT_INPUT,
+} from "./fixtures";
 
 interface FinalizePacketInputView {
   finalizedBy: string;
@@ -44,6 +51,7 @@ async function loadFinalizePacket(): Promise<FinalizePacketFn> {
 
 function seedApprovedPacket(): { record: AnamnesisCase; packetId: string } {
   let record = createCase({
+    ...GENERAL_INTAKE_INPUT,
     patientLabel: "finalization-case",
     intake: {
       chiefConcern: "Recurring back pain",
@@ -54,10 +62,12 @@ function seedApprovedPacket(): { record: AnamnesisCase; packetId: string } {
   });
 
   record = addArtifact(record, {
-    artifactType: "summary",
+    ...SUMMARY_ARTIFACT_INPUT,
     title: "Urgent care note",
     summary: "Pain escalated after lifting a heavy object.",
     sourceDate: "2026-03-25",
+    artifactClass: undefined,
+    semanticType: undefined,
   });
 
   const { nextCase, packet } = draftPhysicianPacket(record, {
@@ -66,8 +76,8 @@ function seedApprovedPacket(): { record: AnamnesisCase; packetId: string } {
   });
 
   const approved = submitReview(nextCase, packet.packetId, {
+    ...APPROVED_REVIEW_INPUT,
     reviewerName: "Dr. Ada",
-    action: "approved",
     comments: "Packet is complete for handoff.",
   });
 
@@ -96,6 +106,7 @@ test("finalizePhysicianPacket rejects packets that are not clinician-approved", 
   const finalizePacket = await loadFinalizePacket();
 
   let record = createCase({
+    ...GENERAL_INTAKE_INPUT,
     patientLabel: "not-approved",
     intake: {
       chiefConcern: "Migraine",
@@ -105,7 +116,7 @@ test("finalizePhysicianPacket rejects packets that are not clinician-approved", 
     },
   });
   record = addArtifact(record, {
-    artifactType: "note",
+    ...NOTE_ARTIFACT_INPUT,
     title: "Initial note",
     summary: "Symptoms noted during intake.",
   });
@@ -128,7 +139,7 @@ test("finalizePhysicianPacket rejects stale packets", async () => {
   const finalizePacket = await loadFinalizePacket();
   const { record, packetId } = seedApprovedPacket();
   const staleRecord = addArtifact(record, {
-    artifactType: "lab",
+    ...LAB_ARTIFACT_INPUT,
     title: "Follow-up lab panel",
     summary: "A new lab panel arrived after approval.",
     sourceDate: "2026-03-30",

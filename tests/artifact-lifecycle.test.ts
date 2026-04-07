@@ -9,9 +9,15 @@ import {
   removeArtifact,
   submitReview,
 } from "../src/domain/anamnesis";
+import {
+  APPROVED_REVIEW_INPUT,
+  GENERAL_INTAKE_INPUT,
+  SUMMARY_ARTIFACT_INPUT,
+} from "./fixtures";
 
 test("removeArtifact marks existing packet drafts stale without silently leaving review mode", () => {
   let record = createCase({
+    ...GENERAL_INTAKE_INPUT,
     patientLabel: "artifact-removal-case",
     intake: {
       chiefConcern: "Recurring dizziness",
@@ -22,10 +28,12 @@ test("removeArtifact marks existing packet drafts stale without silently leaving
   });
 
   record = addArtifact(record, {
-    artifactType: "summary",
+    ...SUMMARY_ARTIFACT_INPUT,
     title: "Urgent care summary",
     summary: "Initial clinician note documented dizziness without diagnosis.",
     sourceDate: "2026-03-28",
+    artifactClass: undefined,
+    semanticType: undefined,
   });
 
   const drafted = draftPhysicianPacket(record, {
@@ -45,6 +53,7 @@ test("removeArtifact marks existing packet drafts stale without silently leaving
 
 test("buildOperationsSummary reflects finalized packets, reviews, and latest update timestamp", () => {
   let finalizedCase = createCase({
+    ...GENERAL_INTAKE_INPUT,
     patientLabel: "summary-finalized-case",
     intake: {
       chiefConcern: "Back pain",
@@ -55,10 +64,12 @@ test("buildOperationsSummary reflects finalized packets, reviews, and latest upd
   });
 
   finalizedCase = addArtifact(finalizedCase, {
-    artifactType: "summary",
+    ...SUMMARY_ARTIFACT_INPUT,
     title: "Urgent care note",
     summary: "Pain escalated after lifting a heavy object.",
     sourceDate: "2026-03-25",
+    artifactClass: undefined,
+    semanticType: undefined,
   });
 
   const drafted = draftPhysicianPacket(finalizedCase, {
@@ -66,8 +77,8 @@ test("buildOperationsSummary reflects finalized packets, reviews, and latest upd
     focus: "Identify next diagnostic step",
   });
   const approved = submitReview(drafted.nextCase, drafted.packet.packetId, {
+    ...APPROVED_REVIEW_INPUT,
     reviewerName: "Dr. Ada",
-    action: "approved",
     comments: "Packet is complete for handoff.",
   });
   const finalized = finalizePhysicianPacket(approved.nextCase, drafted.packet.packetId, {
@@ -76,6 +87,7 @@ test("buildOperationsSummary reflects finalized packets, reviews, and latest upd
   }, new Date("2026-03-31T12:00:00.000Z"));
 
   const intakeOnlyCase = createCase({
+    ...GENERAL_INTAKE_INPUT,
     intake: {
       chiefConcern: "Fatigue",
       symptomSummary: "Persistent fatigue for one week.",
