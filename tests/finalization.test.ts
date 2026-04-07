@@ -4,15 +4,14 @@ import {
   addArtifact,
   createCase,
   draftPhysicianPacket,
-  submitReview,
   type AnamnesisCase,
 } from "../src/domain/anamnesis";
 import {
-  APPROVED_REVIEW_INPUT,
   GENERAL_INTAKE_INPUT,
   LAB_ARTIFACT_INPUT,
   NOTE_ARTIFACT_INPUT,
   SUMMARY_ARTIFACT_INPUT,
+  seedApprovedPacketCase,
 } from "./fixtures";
 
 interface FinalizePacketInputView {
@@ -50,38 +49,33 @@ async function loadFinalizePacket(): Promise<FinalizePacketFn> {
 }
 
 function seedApprovedPacket(): { record: AnamnesisCase; packetId: string } {
-  let record = createCase({
-    ...GENERAL_INTAKE_INPUT,
+  return seedApprovedPacketCase({
     patientLabel: "finalization-case",
-    intake: {
-      chiefConcern: "Recurring back pain",
-      symptomSummary: "Pain has intensified over ten days.",
-      historySummary: "No fracture recorded in prior visits.",
-      questionsForClinician: ["Should imaging be prioritized?"],
+    caseInput: {
+      intake: {
+        chiefConcern: "Recurring back pain",
+        symptomSummary: "Pain has intensified over ten days.",
+        historySummary: "No fracture recorded in prior visits.",
+        questionsForClinician: ["Should imaging be prioritized?"],
+      },
+    },
+    artifactTemplate: SUMMARY_ARTIFACT_INPUT,
+    artifactInput: {
+      title: "Urgent care note",
+      summary: "Pain escalated after lifting a heavy object.",
+      sourceDate: "2026-03-25",
+      artifactClass: undefined,
+      semanticType: undefined,
+    },
+    draftInput: {
+      requestedBy: "triage@example.test",
+      focus: "Identify next diagnostic step",
+    },
+    reviewInput: {
+      reviewerName: "Dr. Ada",
+      comments: "Packet is complete for handoff.",
     },
   });
-
-  record = addArtifact(record, {
-    ...SUMMARY_ARTIFACT_INPUT,
-    title: "Urgent care note",
-    summary: "Pain escalated after lifting a heavy object.",
-    sourceDate: "2026-03-25",
-    artifactClass: undefined,
-    semanticType: undefined,
-  });
-
-  const { nextCase, packet } = draftPhysicianPacket(record, {
-    requestedBy: "triage@example.test",
-    focus: "Identify next diagnostic step",
-  });
-
-  const approved = submitReview(nextCase, packet.packetId, {
-    ...APPROVED_REVIEW_INPUT,
-    reviewerName: "Dr. Ada",
-    comments: "Packet is complete for handoff.",
-  });
-
-  return { record: approved.nextCase, packetId: packet.packetId };
 }
 
 test("finalizePhysicianPacket transitions an approved packet to FINALIZED with metadata", async () => {

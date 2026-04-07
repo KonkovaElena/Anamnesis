@@ -1,9 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  createCase,
-  addArtifact,
-  draftPhysicianPacket,
   finalizePhysicianPacket,
   submitReview,
   type AnamnesisCase,
@@ -15,8 +12,8 @@ import {
   CHANGES_REQUESTED_REVIEW_INPUT,
   GENERAL_INTAKE_INPUT,
   LAB_ARTIFACT_INPUT,
-  NOTE_ARTIFACT_INPUT,
   REJECTED_REVIEW_INPUT,
+  seedDraftPacketCase,
 } from "./fixtures";
 import { jsonRequest, withServer } from "./helpers";
 
@@ -24,29 +21,25 @@ function seedCaseWithPacket(): {
   record: AnamnesisCase;
   packetId: string;
 } {
-  let record = createCase({
-    ...GENERAL_INTAKE_INPUT,
+  return seedDraftPacketCase({
     patientLabel: "review-test",
-    intake: {
-      ...GENERAL_INTAKE_INPUT.intake,
-      chiefConcern: "Recurring headache",
-      symptomSummary: "Headaches have intensified over the past two weeks.",
-      historySummary: "No prior neurological workup.",
-      questionsForClinician: ["Should an MRI be considered?"],
+    caseInput: {
+      intake: {
+        ...GENERAL_INTAKE_INPUT.intake,
+        chiefConcern: "Recurring headache",
+        symptomSummary: "Headaches have intensified over the past two weeks.",
+        historySummary: "No prior neurological workup.",
+        questionsForClinician: ["Should an MRI be considered?"],
+      },
+    },
+    artifactInput: {
+      title: "Initial triage note",
+      summary: "Patient reported onset approximately two weeks ago.",
+    },
+    draftInput: {
+      requestedBy: "triage-nurse@example.test",
     },
   });
-
-  record = addArtifact(record, {
-    ...NOTE_ARTIFACT_INPUT,
-    title: "Initial triage note",
-    summary: "Patient reported onset approximately two weeks ago.",
-  });
-
-  const { nextCase, packet } = draftPhysicianPacket(record, {
-    requestedBy: "triage-nurse@example.test",
-  });
-
-  return { record: nextCase, packetId: packet.packetId };
 }
 
 // ---------------------------------------------------------------------------

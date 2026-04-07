@@ -1,8 +1,13 @@
-import type {
-  AddArtifactInput,
-  CreateCaseInput,
-  RegisterSampleInput,
-  SubmitReviewInput,
+import {
+  addArtifact,
+  createCase,
+  draftPhysicianPacket,
+  submitReview,
+  type AddArtifactInput,
+  type AnamnesisCase,
+  type CreateCaseInput,
+  type RegisterSampleInput,
+  type SubmitReviewInput,
 } from "../src/domain/anamnesis";
 
 // ---------------------------------------------------------------------------
@@ -128,6 +133,71 @@ export const REJECTED_REVIEW_INPUT: SubmitReviewInput = {
   action: "rejected",
   comments: "Insufficient evidence for the stated concern.",
 };
+
+type PacketSeedOptions = {
+  patientLabel?: string;
+  caseInput?: Partial<CreateCaseInput>;
+  artifactTemplate?: AddArtifactInput;
+  artifactInput?: Partial<AddArtifactInput>;
+  draftInput?: {
+    requestedBy?: string;
+    focus?: string;
+  };
+  reviewInput?: Partial<SubmitReviewInput>;
+};
+
+function mergeCaseInput(
+  base: CreateCaseInput,
+  overrides?: Partial<CreateCaseInput>,
+): CreateCaseInput {
+  return {
+    ...base,
+    ...overrides,
+    intake: {
+      ...base.intake,
+      ...(overrides?.intake ?? {}),
+      questionsForClinician:
+        overrides?.intake?.questionsForClinician ?? base.intake.questionsForClinician,
+    },
+  };
+}
+
+export function seedDraftPacketCase(options?: PacketSeedOptions): {
+  record: AnamnesisCase;
+  packetId: string;
+} {
+  const caseOverrides: Partial<CreateCaseInput> = {
+    ...(options?.caseInput ?? {}),
+  };
+
+  if (options?.patientLabel !== undefined) {
+    caseOverrides.patientLabel = options.patientLabel;
+  }
+
+  let record = createCase(mergeCaseInput(GENERAL_INTAKE_INPUT, caseOverrides));
+
+  record = addArtifact(record, {
+    ...(options?.artifactTemplate ?? NOTE_ARTIFACT_INPUT),
+    ...(options?.artifactInput ?? {}),
+  });
+
+  const { nextCase, packet } = draftPhysicianPacket(record, options?.draftInput ?? {});
+
+  return { record: nextCase, packetId: packet.packetId };
+}
+
+export function seedApprovedPacketCase(options?: PacketSeedOptions): {
+  record: AnamnesisCase;
+  packetId: string;
+} {
+  const { record, packetId } = seedDraftPacketCase(options);
+  const approved = submitReview(record, packetId, {
+    ...APPROVED_REVIEW_INPUT,
+    ...(options?.reviewInput ?? {}),
+  });
+
+  return { record: approved.nextCase, packetId };
+}
 
 // ---------------------------------------------------------------------------
 // Document ingestion payloads
