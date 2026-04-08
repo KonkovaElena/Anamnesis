@@ -84,7 +84,7 @@ What is not yet true:
 
 1. TLS is expected to be handled by deployment infrastructure rather than by the Node process itself.
 2. Auth is shared-secret based, not user- or role-based.
-3. There is no central secret manager integration or automated key rotation workflow in this repository.
+3. There is no central secret manager integration or automated key rotation workflow in this repository. See [crypto-agility-inventory.md](crypto-agility-inventory.md) for the migration plan.
 4. The audit trail is append-only in software terms, but not cryptographically sealed.
 5. There is no formal backup, restore, or disaster-recovery runbook in the active docs set yet.
 6. Imaging study identifiers and molecular sample metadata are encrypted at rest with the case record, but they are not isolated behind a second compartment or field-level key boundary.
