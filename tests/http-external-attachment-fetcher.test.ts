@@ -149,3 +149,132 @@ test("HttpExternalAttachmentFetcher rejects hosts that resolve to private or met
   );
   assert.equal(called, false);
 });
+
+test("HttpExternalAttachmentFetcher rejects URLs with embedded credentials", async () => {
+  const HttpExternalAttachmentFetcher = await loadHttpExternalAttachmentFetcher();
+  let called = false;
+
+  const fetcher = new HttpExternalAttachmentFetcher({
+    lookupImplementation: async () => [{ address: "93.184.216.34", family: 4 }],
+    fetchImplementation: async () => {
+      called = true;
+      return new Response("ignored", {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      });
+    },
+  });
+
+  await assert.rejects(
+    () => fetcher.fetchAttachment("https://user:pass@example.test/file.txt"),
+    /credentials/i,
+  );
+  assert.equal(called, false);
+});
+
+test("HttpExternalAttachmentFetcher rejects non-ok HTTP responses", async () => {
+  const HttpExternalAttachmentFetcher = await loadHttpExternalAttachmentFetcher();
+
+  const fetcher = new HttpExternalAttachmentFetcher({
+    lookupImplementation: async () => [{ address: "93.184.216.34", family: 4 }],
+    fetchImplementation: async () =>
+      new Response("Not Found", { status: 404 }),
+  });
+
+  await assert.rejects(
+    () => fetcher.fetchAttachment("https://example.test/file.txt"),
+    /status 404/i,
+  );
+});
+
+test("HttpExternalAttachmentFetcher enforces hostname allowlist", async () => {
+  const HttpExternalAttachmentFetcher = await loadHttpExternalAttachmentFetcher();
+  let called = false;
+
+  const fetcher = new HttpExternalAttachmentFetcher({
+    allowedHosts: ["trusted.example.test"],
+    lookupImplementation: async () => [{ address: "93.184.216.34", family: 4 }],
+    fetchImplementation: async () => {
+      called = true;
+      return new Response("ignored", {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      });
+    },
+  });
+
+  await assert.rejects(
+    () => fetcher.fetchAttachment("https://untrusted.example.test/file.txt"),
+    /allowlist/i,
+  );
+  assert.equal(called, false);
+});
+
+test("HttpExternalAttachmentFetcher rejects IPv6 ULA addresses from DNS resolution", async () => {
+  const HttpExternalAttachmentFetcher = await loadHttpExternalAttachmentFetcher();
+  let called = false;
+
+  const fetcher = new HttpExternalAttachmentFetcher({
+    lookupImplementation: async () => [{ address: "fd12::1", family: 6 }],
+    fetchImplementation: async () => {
+      called = true;
+      return new Response("ignored", {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      });
+    },
+  });
+
+  await assert.rejects(
+    () => fetcher.fetchAttachment("https://example.test/file.txt"),
+    /private|local|metadata|special-use/i,
+  );
+  assert.equal(called, false);
+});
+
+test("HttpExternalAttachmentFetcher rejects oversized response bodies", async () => {
+  const HttpExternalAttachmentFetcher = await loadHttpExternalAttachmentFetcher();
+  const oversizedBody = "A".repeat(512);
+
+  const fetcher = new HttpExternalAttachmentFetcher({
+    maxBytes: 64,
+    lookupImplementation: async () => [{ address: "93.184.216.34", family: 4 }],
+    fetchImplementation: async () =>
+      new Response(oversizedBody, {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      }),
+  });
+
+  await assert.rejects(
+    () => fetcher.fetchAttachment("https://example.test/file.txt"),
+    /exceeded.*64 byte/i,
+  );
+});
+
+test("HttpExternalAttachmentFetcher aborts fetch after configured timeout", async () => {
+  const HttpExternalAttachmentFetcher = await loadHttpExternalAttachmentFetcher();
+
+  const fetcher = new HttpExternalAttachmentFetcher({
+    timeoutMs: 50,
+    lookupImplementation: async () => [{ address: "93.184.216.34", family: 4 }],
+    fetchImplementation: async (_url: string, init?: RequestInit) => {
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(resolve, 5_000);
+        init?.signal?.addEventListener("abort", () => {
+          clearTimeout(timer);
+          reject(new DOMException("The operation was aborted.", "AbortError"));
+        });
+      });
+      return new Response("should not reach", {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      });
+    },
+  });
+
+  await assert.rejects(
+    () => fetcher.fetchAttachment("https://example.test/slow.txt"),
+    /timed out/i,
+  );
+});

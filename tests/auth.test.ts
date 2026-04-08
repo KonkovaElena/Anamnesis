@@ -128,3 +128,22 @@ test("bootstrap rejects insecure dev auth when node environment is production", 
     /production/i,
   );
 });
+
+test("request with non-Bearer auth scheme returns 401", async () => {
+  await withAuthServer(TEST_API_KEY, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/cases`, {
+      headers: { authorization: `Basic ${Buffer.from("user:pass").toString("base64")}` },
+    });
+    assert.equal(response.status, 401);
+    assert.equal(response.headers.get("www-authenticate"), "Bearer");
+  });
+});
+
+test("request with empty Bearer token returns 401", async () => {
+  await withAuthServer(TEST_API_KEY, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/cases`, {
+      headers: { authorization: "Bearer " },
+    });
+    assert.equal(response.status, 401);
+  });
+});
