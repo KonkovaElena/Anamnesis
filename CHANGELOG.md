@@ -11,7 +11,8 @@ The format is based on Keep a Changelog and the project uses Semantic Versioning
 - domain contracts split from single `contracts.ts` into focused sub-modules: `types.ts`, `errors.ts`, `interfaces.ts`, `store-contracts.ts`, with backward-compatible barrel re-export;
 - shared test fixtures (`tests/fixtures.ts`) and HTTP helpers (`tests/helpers.ts`) adopted across 12 test files, reducing inline payload duplication by ~400 lines;
 - traceability matrix anchors updated to reference precise sub-modules after domain split;
-- cryptographic inventory and agility assessment added to `docs/security/crypto-agility-inventory.md` covering current primitives, key management state, quantum readiness, and phased migration plan.
+- cryptographic inventory and agility assessment added to `docs/security/crypto-agility-inventory.md` covering current primitives, key management state, quantum readiness, and phased migration plan;
+- SSRF defense-path coverage expanded: embedded-credential rejection, redirect blocking, timeout abort, oversized-body fail-closed, host allowlist enforcement, IPv6 ULA rejection, non-ok HTTP status, non-Bearer auth scheme rejection, and empty Bearer token rejection now have dedicated tests (suite total 129 → 137).
 
 ### Added
 
