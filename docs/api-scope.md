@@ -1,8 +1,8 @@
 ---
 title: "Anamnesis API Scope"
 status: active
-version: "1.2.2"
-last_updated: "2026-04-05"
+version: "1.3.0"
+last_updated: "2026-04-08"
 tags: [anamnesis, api, reference]
 ---
 
@@ -22,6 +22,12 @@ This is an organizational workflow API, not a diagnostic or treatment API.
 - Startup without `API_KEY` is rejected unless `ALLOW_INSECURE_DEV_AUTH=true` is explicitly set.
 - `ALLOW_INSECURE_DEV_AUTH=true` is rejected when `NODE_ENV=production`.
 - `GET /healthz`, `GET /readyz`, and `GET /metrics` remain unauthenticated even when bearer auth is enabled.
+
+## Rate Limiting
+
+- When `RATE_LIMIT_RPM` is configured, a per-IP sliding-window limiter applies to all routes except `GET /healthz` and `GET /readyz`.
+- `GET /metrics` is subject to rate limiting even though it is exempt from bearer authentication.
+- Rate-limited responses return `429 Too Many Requests`.
 
 ## Request And Content Bounds
 

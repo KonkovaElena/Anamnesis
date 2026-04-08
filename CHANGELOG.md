@@ -6,6 +6,12 @@ The format is based on Keep a Changelog and the project uses Semantic Versioning
 
 ## [Unreleased]
 
+### Changed
+
+- domain contracts split from single `contracts.ts` into focused sub-modules: `types.ts`, `errors.ts`, `interfaces.ts`, `store-contracts.ts`, with backward-compatible barrel re-export;
+- shared test fixtures (`tests/fixtures.ts`) and HTTP helpers (`tests/helpers.ts`) adopted across 12 test files, reducing inline payload duplication by ~400 lines;
+- traceability matrix anchors updated to reference precise sub-modules after domain split.
+
 ### Added
 
 - workflow-family-aware case creation and case-scoped extraction routes for molecular samples, imaging study context, and QC summaries;
