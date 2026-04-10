@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomBytes } from "node:crypto";
+import { createCipheriv, randomBytes } from "node:crypto";
 import test from "node:test";
 import { decrypt, encrypt, parseEncryptionKey } from "../src/infrastructure/encryption";
 
@@ -39,14 +39,35 @@ test("decrypt fails with wrong key", () => {
 test("decrypt fails on tampered ciphertext", () => {
   const token = encrypt("secret", TEST_KEY);
   const parts = token.split(":");
-  // flip a character in the ciphertext portion
-  const corrupted = parts[2].replace(/[0-9a-f]/, (c) => (c === "0" ? "1" : "0"));
-  assert.throws(() => decrypt(`${parts[0]}:${parts[1]}:${corrupted}`, TEST_KEY));
+  // v1:iv:tag:ciphertext — flip a character in the ciphertext portion (index 3)
+  const corrupted = parts[3].replace(/[0-9a-f]/, (c) => (c === "0" ? "1" : "0"));
+  assert.throws(() => decrypt(`${parts[0]}:${parts[1]}:${parts[2]}:${corrupted}`, TEST_KEY));
 });
 
 test("decrypt rejects malformed token", () => {
-  assert.throws(() => decrypt("not:a:valid:token", TEST_KEY));
+  assert.throws(() => decrypt("not:a:valid:token:extra", TEST_KEY));
   assert.throws(() => decrypt("garbage", TEST_KEY));
+});
+
+test("encrypt produces v1-prefixed token", () => {
+  const token = encrypt("hello", TEST_KEY);
+  assert.ok(token.startsWith("v1:"), `Expected v1: prefix, got: ${token.slice(0, 10)}`);
+  const parts = token.split(":");
+  assert.equal(parts.length, 4, "v1 token should have 4 colon-separated parts");
+});
+
+test("decrypt handles legacy 3-part tokens without version prefix", () => {
+  // Manually construct a legacy-format token (iv:tag:ciphertext without v1: prefix)
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", TEST_KEY, iv);
+  const encrypted = Buffer.concat([cipher.update("legacy-data", "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  const legacyToken = `${iv.toString("hex")}:${tag.toString("hex")}:${encrypted.toString("hex")}`;
+
+  // Should NOT start with v1:
+  assert.ok(!legacyToken.startsWith("v1:"));
+  // Should decrypt correctly via legacy path
+  assert.equal(decrypt(legacyToken, TEST_KEY), "legacy-data");
 });
 
 test("parseEncryptionKey accepts valid 64-hex string", () => {

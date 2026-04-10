@@ -1,8 +1,8 @@
 ---
 title: "Anamnesis Traceability Matrix"
 status: active
-version: "1.2.0"
-last_updated: "2026-04-08"
+version: "1.3.0"
+last_updated: "2026-04-09"
 tags: [anamnesis, traceability, evidence, reference]
 ---
 
@@ -31,8 +31,10 @@ This page is the shortest route for checking whether a product or diligence stat
 | Secure-by-default auth startup | Normal runtime requires `API_KEY`; unauthenticated startup requires an explicit dev override and is blocked in production mode. | `src/index.ts`, `src/bootstrap.ts`, `src/application/auth-middleware.ts` | `tests/auth.test.ts` |
 | Review ledger and packet finalization | The system records explicit clinician reviews and finalizes only approved, non-stale packets. | `src/application/create-app/packet-routes.ts`, `src/domain/anamnesis/packet-workflow.ts` | `tests/review-ledger.test.ts`, `tests/finalization.test.ts` |
 | Audit trail and operational counters | The system writes append-only audit events for write flows and exposes aggregate counters. | `src/application/create-app/ops-routes.ts`, `src/domain/anamnesis/operations.ts`, `src/infrastructure/SqliteAuditTrailStore.ts`, `src/infrastructure/InMemoryAuditTrailStore.ts` | `tests/audit-trail.test.ts`, `tests/api.test.ts` |
-| Encrypted durable persistence | The system can persist cases in SQLite with AES-256-GCM encryption at rest when configured. | `src/infrastructure/SqliteAnamnesisStore.ts`, `src/infrastructure/encryption.ts`, `src/bootstrap.ts` | `tests/encryption.test.ts`, `tests/sqlite-store.test.ts` |
+| Encrypted durable persistence | The system can persist cases in SQLite with AES-256-GCM encryption at rest when configured, using a versioned token format for future key rotation. | `src/infrastructure/SqliteAnamnesisStore.ts`, `src/infrastructure/encryption.ts`, `src/bootstrap.ts` | `tests/encryption.test.ts`, `tests/sqlite-store.test.ts` |
 | Graceful shutdown | The process exposes health/readiness behavior and drains on shutdown. | `src/index.ts`, `src/graceful-shutdown.ts`, `src/application/create-app.ts` | `tests/shutdown.test.ts`, `tests/api.test.ts` |
+| SSRF defense in depth | External attachment fetch rejects private, local, metadata, and special-use targets through hostname denial, DNS pre-resolution, address validation, credential rejection, redirect blocking, and bounded response reads. | `src/infrastructure/external-attachment-target-validators.ts`, `src/infrastructure/HttpExternalAttachmentFetcher.ts` | `tests/http-external-attachment-fetcher.test.ts` |
+| Paginated list endpoints | Case listing and audit-event listing return bounded pages with configurable limit and offset, preventing unbounded memory consumption. | `src/domain/anamnesis/store-contracts.ts`, `src/application/create-app/case-routes.ts`, `src/infrastructure/SqliteAnamnesisStore.ts`, `src/infrastructure/InMemoryAnamnesisStore.ts` | `tests/api.test.ts` |
 
 ## Use Rule
 

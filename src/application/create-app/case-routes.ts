@@ -8,6 +8,7 @@ import {
   registerSample,
   removeArtifact,
 } from "../../domain/anamnesis";
+import { clampPagination } from "../../domain/anamnesis/store-contracts";
 import {
   addArtifactSchema,
   attachStudyContextSchema,
@@ -47,12 +48,18 @@ export function registerCaseRoutes(
     response.status(201).json({ case: record });
   });
 
-  app.get("/api/cases", async (_request, response) => {
-    const cases = await store.listCases();
+  app.get("/api/cases", async (request, response) => {
+    const pagination = clampPagination({
+      limit: request.query.limit ? Number(request.query.limit) : undefined,
+      offset: request.query.offset ? Number(request.query.offset) : undefined,
+    });
+    const cases = await store.listCases(pagination);
     response.json({
       cases,
       meta: {
-        totalCases: cases.length,
+        returnedCount: cases.length,
+        limit: pagination.limit,
+        offset: pagination.offset,
       },
     });
   });
@@ -257,11 +264,17 @@ export function registerCaseRoutes(
 
   app.get("/api/cases/:caseId/audit-events", async (request, response) => {
     const caseId = readRouteParam(request.params.caseId);
-    const events = await auditStore.listByCase(caseId);
+    const pagination = clampPagination({
+      limit: request.query.limit ? Number(request.query.limit) : undefined,
+      offset: request.query.offset ? Number(request.query.offset) : undefined,
+    });
+    const events = await auditStore.listByCase(caseId, pagination);
     response.json({
       events,
       meta: {
-        totalEvents: events.length,
+        returnedCount: events.length,
+        limit: pagination.limit,
+        offset: pagination.offset,
       },
     });
   });

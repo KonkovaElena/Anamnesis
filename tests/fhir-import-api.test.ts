@@ -77,7 +77,7 @@ test("POST /fhir-imports creates a bounded artifact, stales packets, and records
 
     const auditResponse = await jsonRequest<{
       events: Array<{ eventType: string }>;
-      meta: { totalEvents: number };
+      meta: { returnedCount: number; limit: number; offset: number };
     }>(baseUrl, `/api/cases/${caseId}/audit-events`);
 
     assert.deepStrictEqual(auditResponse.body.events.map((event) => event.eventType), [
@@ -86,7 +86,7 @@ test("POST /fhir-imports creates a bounded artifact, stales packets, and records
       "packet.drafted",
       "fhir.imported",
     ]);
-    assert.equal(auditResponse.body.meta.totalEvents, 4);
+    assert.equal(auditResponse.body.meta.returnedCount, 4);
 
     const summaryResponse = await jsonRequest<{
       summary: { totalArtifacts: number; totalPackets: number; totalAuditEvents: number };

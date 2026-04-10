@@ -1,5 +1,6 @@
 import Database from "better-sqlite3";
-import type { AuditEventRecord } from "../domain/anamnesis";
+import type { AuditEventRecord, PaginationOptions } from "../domain/anamnesis";
+import { clampPagination } from "../domain/anamnesis/store-contracts";
 import {
   AUDIT_EVENT_SELECT_FIELDS,
   mapSqliteAuditEventRow,
@@ -12,15 +13,18 @@ export function listSqliteAuditEventsByField(
   db: Database.Database,
   field: AuditEventLookupField,
   value: string,
+  options?: PaginationOptions,
 ): AuditEventRecord[] {
+  const { limit, offset } = clampPagination(options);
   const rows = db
     .prepare(
       `SELECT ${AUDIT_EVENT_SELECT_FIELDS}
        FROM audit_events
        WHERE ${field} = ?
-       ORDER BY sequence ASC`
+       ORDER BY sequence ASC
+       LIMIT ? OFFSET ?`
     )
-    .all(value) as SqliteAuditEventRow[];
+    .all(value, limit, offset) as SqliteAuditEventRow[];
 
   return rows.map(mapSqliteAuditEventRow);
 }

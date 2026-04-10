@@ -61,7 +61,7 @@ test("POST /document-ingestions creates a bounded artifact, stales packets, and 
 
     const auditResponse = await jsonRequest<{
       events: Array<{ eventType: string }>;
-      meta: { totalEvents: number };
+      meta: { returnedCount: number; limit: number; offset: number };
     }>(baseUrl, `/api/cases/${caseId}/audit-events`);
 
     assert.deepStrictEqual(auditResponse.body.events.map((event) => event.eventType), [
@@ -70,7 +70,7 @@ test("POST /document-ingestions creates a bounded artifact, stales packets, and 
       "packet.drafted",
       "document.ingested",
     ]);
-    assert.equal(auditResponse.body.meta.totalEvents, 4);
+    assert.equal(auditResponse.body.meta.returnedCount, 4);
 
     const summaryResponse = await jsonRequest<{
       summary: { totalArtifacts: number; totalPackets: number; totalAuditEvents: number };

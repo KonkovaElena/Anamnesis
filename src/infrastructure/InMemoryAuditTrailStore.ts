@@ -1,5 +1,6 @@
 import { validateAuditEventRecord } from "../core/audit-events";
-import type { AuditEventRecord, AuditTrailStore } from "../domain/anamnesis";
+import type { AuditEventRecord, AuditTrailStore, PaginationOptions } from "../domain/anamnesis";
+import { clampPagination } from "../domain/anamnesis/store-contracts";
 
 export class InMemoryAuditTrailStore implements AuditTrailStore {
   private readonly events: AuditEventRecord[] = [];
@@ -8,10 +9,12 @@ export class InMemoryAuditTrailStore implements AuditTrailStore {
     this.events.push(validateAuditEventRecord(structuredClone(event)));
   }
 
-  async listByCase(caseId: string): Promise<AuditEventRecord[]> {
+  async listByCase(caseId: string, options?: PaginationOptions): Promise<AuditEventRecord[]> {
+    const { limit, offset } = clampPagination(options);
     return this.events
       .filter((event) => event.caseId === caseId)
-      .map((event) => structuredClone(event));
+      .map((event) => structuredClone(event))
+      .slice(offset, offset + limit);
   }
 
   async listByCorrelationId(correlationId: string): Promise<AuditEventRecord[]> {

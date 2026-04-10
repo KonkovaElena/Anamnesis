@@ -1,0 +1,14 @@
+node_modules
+dist
+.git
+.github
+docs
+tests
+coverage
+*.md
+!README.md
+.coverage-report.txt
+.diff-output.txt
+CITATION.cff
+GOVERNANCE.md
+SUPPORT.md

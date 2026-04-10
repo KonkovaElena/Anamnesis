@@ -1,6 +1,6 @@
 import Database from "better-sqlite3";
 import { validateAuditEventRecord } from "../core/audit-events";
-import type { AuditEventRecord, AuditTrailStore } from "../domain/anamnesis";
+import type { AuditEventRecord, AuditTrailStore, PaginationOptions } from "../domain/anamnesis";
 import {
   listSqliteAuditEventsByField,
 } from "./sqlite-audit-event-readers";
@@ -94,8 +94,8 @@ export class SqliteAuditTrailStore implements AuditTrailStore {
       );
   }
 
-  async listByCase(caseId: string): Promise<AuditEventRecord[]> {
-    return listSqliteAuditEventsByField(this.db, "case_id", caseId);
+  async listByCase(caseId: string, options?: PaginationOptions): Promise<AuditEventRecord[]> {
+    return listSqliteAuditEventsByField(this.db, "case_id", caseId, options);
   }
 
   async listByCorrelationId(correlationId: string): Promise<AuditEventRecord[]> {

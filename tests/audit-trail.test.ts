@@ -74,7 +74,7 @@ test("POST finalize transitions an approved packet and GET audit-events returns 
 
     const auditResponse = await jsonRequest<{
       events: Array<{ eventType: string }>;
-      meta: { totalEvents: number };
+      meta: { returnedCount: number; limit: number; offset: number };
     }>(baseUrl, `/api/cases/${caseId}/audit-events`);
 
     assert.equal(auditResponse.status, 200);
@@ -85,7 +85,7 @@ test("POST finalize transitions an approved packet and GET audit-events returns 
       "review.submitted",
       "packet.finalized",
     ]);
-    assert.equal(auditResponse.body.meta.totalEvents, 5);
+    assert.equal(auditResponse.body.meta.returnedCount, 5);
   });
 });
 
@@ -131,12 +131,12 @@ test("audit trail survives case deletion and metrics expose finalized packet and
 
     const auditResponse = await jsonRequest<{
       events: Array<{ eventType: string }>;
-      meta: { totalEvents: number };
+      meta: { returnedCount: number; limit: number; offset: number };
     }>(baseUrl, `/api/cases/${caseId}/audit-events`);
 
     assert.equal(auditResponse.status, 200);
     assert.equal(auditResponse.body.events.at(-1)?.eventType, "case.deleted");
-    assert.equal(auditResponse.body.meta.totalEvents, 6);
+    assert.equal(auditResponse.body.meta.returnedCount, 6);
 
     const metricsResponse = await fetch(`${baseUrl}/metrics`);
     const metricsText = await metricsResponse.text();

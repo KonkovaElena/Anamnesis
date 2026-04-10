@@ -1,12 +1,15 @@
-import type { AnamnesisCase, AnamnesisStore } from "../domain/anamnesis";
+import type { AnamnesisCase, AnamnesisStore, PaginationOptions } from "../domain/anamnesis";
+import { clampPagination } from "../domain/anamnesis/store-contracts";
 
 export class InMemoryAnamnesisStore implements AnamnesisStore {
   private readonly records = new Map<string, AnamnesisCase>();
 
-  async listCases(): Promise<AnamnesisCase[]> {
+  async listCases(options?: PaginationOptions): Promise<AnamnesisCase[]> {
+    const { limit, offset } = clampPagination(options);
     return [...this.records.values()]
       .map((record) => structuredClone(record))
-      .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+      .slice(offset, offset + limit);
   }
 
   async getCase(caseId: string): Promise<AnamnesisCase | undefined> {

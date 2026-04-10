@@ -6,6 +6,13 @@ export interface RateLimiterOptions {
   skipPaths?: Set<string>;
 }
 
+function normalizeClientIp(raw: string): string {
+  if (raw.startsWith("::ffff:")) {
+    return raw.slice(7);
+  }
+  return raw;
+}
+
 export function createRateLimiter(options: RateLimiterOptions) {
   const { windowMs, maxRequests, skipPaths } = options;
   const hits = new Map<string, number[]>();
@@ -29,7 +36,7 @@ export function createRateLimiter(options: RateLimiterOptions) {
       return;
     }
 
-    const key = request.ip ?? "unknown";
+    const key = normalizeClientIp(request.ip ?? "unknown");
     const now = Date.now();
     const cutoff = now - windowMs;
 

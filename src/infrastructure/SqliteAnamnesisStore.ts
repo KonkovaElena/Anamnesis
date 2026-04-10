@@ -1,5 +1,6 @@
 import Database from "better-sqlite3";
-import type { AnamnesisCase, AnamnesisStore } from "../domain/anamnesis";
+import type { AnamnesisCase, AnamnesisStore, PaginationOptions } from "../domain/anamnesis";
+import { clampPagination } from "../domain/anamnesis/store-contracts";
 import { decrypt, encrypt } from "./encryption";
 
 export interface SqliteStoreOptions {
@@ -28,10 +29,11 @@ export class SqliteAnamnesisStore implements AnamnesisStore {
     `);
   }
 
-  async listCases(): Promise<AnamnesisCase[]> {
+  async listCases(options?: PaginationOptions): Promise<AnamnesisCase[]> {
+    const { limit, offset } = clampPagination(options);
     const rows = this.db
-      .prepare("SELECT encrypted_data FROM cases ORDER BY created_at DESC")
-      .all() as Array<{ encrypted_data: string }>;
+      .prepare("SELECT encrypted_data FROM cases ORDER BY created_at DESC LIMIT ? OFFSET ?")
+      .all(limit, offset) as Array<{ encrypted_data: string }>;
 
     return rows.map((row) => JSON.parse(decrypt(row.encrypted_data, this.key)));
   }

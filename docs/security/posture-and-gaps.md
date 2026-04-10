@@ -1,8 +1,8 @@
 ---
 title: "Anamnesis Security Posture And Gaps"
 status: active
-version: "1.0.1"
-last_updated: "2026-04-05"
+version: "1.1.0"
+last_updated: "2026-04-09"
 tags: [anamnesis, security, evidence]
 ---
 
@@ -26,10 +26,10 @@ This page is implementation-grounded. It does not claim security controls that a
 | --- | --- | --- | --- |
 | Unauthenticated application access | Bearer token auth on application routes when `API_KEY` is set | `src/application/auth-middleware.ts`, `src/bootstrap.ts` | Single shared bearer secret, not per-user identity or RBAC |
 | Silent fail-open startup | Secure-by-default bootstrap policy; unauthenticated startup now requires explicit `ALLOW_INSECURE_DEV_AUTH=true` and is blocked in production mode | `src/bootstrap.ts`, `src/index.ts` | Local-dev override still exists by design |
-| Brute-force or burst abuse | Per-IP sliding-window limiter via `RATE_LIMIT_RPM` | `src/application/rate-limiter.ts`, `src/application/create-app.ts` | Disabled by default unless configured |
+| Brute-force or burst abuse | Per-IP sliding-window limiter via `RATE_LIMIT_RPM` with IPv4-mapped IPv6 normalization | `src/application/rate-limiter.ts`, `src/application/create-app.ts` | Disabled by default unless configured |
 | Header hardening | Helmet with CSP/HSTS/COOP/CORP/Referrer-Policy and related headers | `src/application/create-app.ts` | TLS termination is still deployment-side, not in-process |
 | Input shape abuse | Zod request validation plus malformed JSON handling | `src/application/create-app.ts` | Payload-size exhaustion beyond configured limits is not separately documented as a public API contract |
-| Data-at-rest disclosure | AES-256-GCM whole-record encryption for SQLite case store | `src/infrastructure/encryption.ts`, `src/infrastructure/SqliteAnamnesisStore.ts` | Audit store is durable but not encrypted by a second independent mechanism |
+| Data-at-rest disclosure | AES-256-GCM whole-record encryption for SQLite case store with versioned token format (`v1:` prefix) for future key rotation | `src/infrastructure/encryption.ts`, `src/infrastructure/SqliteAnamnesisStore.ts` | Audit store is durable but not encrypted by a second independent mechanism |
 | External attachment SSRF | `https` only, no URL credentials, local/metadata hostname denial, DNS resolution to public addresses only, redirect rejection, text-only MIME restriction, byte limit, optional hostname allowlist | `src/infrastructure/HttpExternalAttachmentFetcher.ts` | Stronger production posture still benefits from network egress controls |
 | Unauthorized claim widening via FHIR | Import seam remains constrained to narrow text-oriented resources and bundle types | `src/domain/anamnesis.ts`, `docs/claim-boundary.md` | Not a generic FHIR REST server |
 | Tampering or retroactive workflow confusion | Append-only audit events for write actions and packet review/finalization transitions | `src/domain/anamnesis.ts`, `src/infrastructure/*AuditTrailStore.ts` | No cryptographic signing or external notarization yet |

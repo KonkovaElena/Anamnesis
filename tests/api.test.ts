@@ -152,11 +152,11 @@ test("case creation, listing, and detail retrieval work end-to-end", async () =>
 
     const listResponse = await jsonRequest<{
       cases: Array<{ caseId: string }>;
-      meta: { totalCases: number };
+      meta: { returnedCount: number; limit: number; offset: number };
     }>(baseUrl, "/api/cases");
 
     assert.equal(listResponse.status, 200);
-    assert.equal(listResponse.body.meta.totalCases, 1);
+    assert.equal(listResponse.body.meta.returnedCount, 1);
     assert.equal(listResponse.body.cases[0].caseId, createResponse.body.case.caseId);
 
     const detailResponse = await jsonRequest<{ case: { caseId: string; status: string } }>(

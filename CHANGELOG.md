@@ -6,6 +6,15 @@ The format is based on Keep a Changelog and the project uses Semantic Versioning
 
 ## [Unreleased]
 
+### Added
+
+- cursor-based pagination (`limit`, `offset` query params) on `GET /api/cases` and `GET /api/cases/:caseId/audit-events`; default page size 100, maximum 1000;
+- versioned encryption token format (`v1:iv:tag:ciphertext`) with backward-compatible decryption of legacy 3-part tokens, enabling future key rotation without data loss;
+- IPv4-mapped IPv6 address normalization in rate limiter (`::ffff:x.x.x.x → x.x.x.x`) preventing per-family key bypass;
+- multi-stage `Dockerfile` and `.dockerignore` for reproducible container builds (Node 24 Alpine, non-root, tini, healthcheck);
+- encryption versioning and legacy-compat tests (`tests/encryption.test.ts`);
+- SSRF defense and paginated-endpoint rows in traceability matrix.
+
 ### Changed
 
 - domain contracts split from single `contracts.ts` into focused sub-modules: `types.ts`, `errors.ts`, `interfaces.ts`, `store-contracts.ts`, with backward-compatible barrel re-export;
