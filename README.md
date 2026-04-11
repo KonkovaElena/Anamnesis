@@ -170,6 +170,22 @@ Operational probes:
 - `/metrics` remains unauthenticated like `/healthz` and `/readyz`, so monitoring access should sit behind separate network controls when exposure beyond the local trust boundary is possible.
 - If you enable `RATE_LIMIT_RPM` behind a reverse proxy or load balancer, configure Express proxy trust for the deployment topology before relying on `request.ip` for enforcement.
 
+## Docker
+
+A multi-stage Dockerfile is included. Build and run:
+
+```bash
+docker build -t anamnesis .
+docker run -p 4020:4020 \
+  -e API_KEY=your-secret-key \
+  -e STORE_PATH=/data/anamnesis.db \
+  -e ENCRYPTION_KEY=$(openssl rand -hex 32) \
+  -v anamnesis-data:/data \
+  anamnesis
+```
+
+The image uses Node 24 Alpine, runs as a non-root user, and includes a built-in health check against `/healthz`.
+
 ## Environment Contract
 
 | Variable | Required | Default | Description |

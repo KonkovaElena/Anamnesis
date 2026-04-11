@@ -87,6 +87,9 @@ paths:
       tags: [Cases]
       summary: List cases
       operationId: listCases
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
       responses:
         '200':
           description: Cases listed.
@@ -522,6 +525,9 @@ paths:
       description: |
         Return append-only audit history by `caseId`. This endpoint is keyed to the audit store and may still
         return events after the case itself has been deleted.
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
       responses:
         '200':
           description: Audit events returned.
@@ -627,6 +633,25 @@ components:
       schema:
         type: string
         format: uuid
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: Maximum number of items to return (1-1000, default 100).
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 1000
+        default: 100
+    Offset:
+      name: offset
+      in: query
+      required: false
+      description: Number of items to skip (default 0).
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
   responses:
     ValidationError:
       description: Request validation failed.
@@ -724,6 +749,21 @@ components:
     FhirBundleProfile:
       type: string
       enum: [fhir.bundle.document.v1, fhir.bundle.collection.v1]
+    PaginationMeta:
+      type: object
+      additionalProperties: false
+      required: [returnedCount, limit, offset]
+      properties:
+        returnedCount:
+          type: integer
+          minimum: 0
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 1000
+        offset:
+          type: integer
+          minimum: 0
     CaseIntake:
       type: object
       additionalProperties: false
@@ -1366,13 +1406,7 @@ components:
           items:
             $ref: '#/components/schemas/AnamnesisCase'
         meta:
-          type: object
-          additionalProperties: false
-          required: [totalCases]
-          properties:
-            totalCases:
-              type: integer
-              minimum: 0
+          $ref: '#/components/schemas/PaginationMeta'
     DocumentIngestionResponse:
       type: object
       additionalProperties: false
@@ -1476,13 +1510,7 @@ components:
           items:
             $ref: '#/components/schemas/AuditEventRecord'
         meta:
-          type: object
-          additionalProperties: false
-          required: [totalEvents]
-          properties:
-            totalEvents:
-              type: integer
-              minimum: 0
+          $ref: '#/components/schemas/PaginationMeta'
     OperationsSummaryResponse:
       type: object
       additionalProperties: false
