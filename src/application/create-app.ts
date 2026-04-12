@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import express, { type NextFunction, type Request, type Response } from "express";
 import helmet from "helmet";
 import { ZodError } from "zod";
+import type { JwtRemoteJwksObservabilityReader } from "../core/jwt-verification";
 import { createRateLimiter } from "./rate-limiter";
 import {
   AnamnesisDomainError,
@@ -24,6 +25,7 @@ interface CreateAppDependencies {
   rateLimitRpm?: number;
   externalAttachmentFetcher?: ExternalAttachmentFetcher;
   llmSidecar?: LlmSidecar;
+  remoteJwtJwksTelemetry?: JwtRemoteJwksObservabilityReader;
 }
 
 export function createApp({
@@ -34,6 +36,7 @@ export function createApp({
   rateLimitRpm,
   externalAttachmentFetcher,
   llmSidecar,
+  remoteJwtJwksTelemetry,
 }: CreateAppDependencies) {
   const app = express();
   const parseJson = express.json({ limit: "256kb" });
@@ -79,6 +82,7 @@ export function createApp({
     externalAttachmentFetcher,
     isShuttingDown,
     llmSidecar,
+    remoteJwtJwksTelemetry,
   };
 
   registerCaseRoutes(app, routeDependencies, parseJson);

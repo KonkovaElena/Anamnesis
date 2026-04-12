@@ -51,6 +51,34 @@ export interface JwtRemoteJwksResolver {
   getJwks(options?: { requiredKid?: string }): Promise<JwtJwkSet>;
 }
 
+export interface RemoteJwtJwksObservabilitySnapshot {
+  enabled: boolean;
+  totalFetches: number;
+  totalCacheHits: number;
+  totalKidMissRefreshes: number;
+  totalFetchFailures: number;
+  cachedKeyCount: number;
+  lastSuccessfulFetchAt: string | null;
+  lastFailedFetchAt: string | null;
+  cacheFreshUntilAt: string | null;
+}
+
+export interface JwtRemoteJwksObservabilityReader {
+  getObservabilitySnapshot(): RemoteJwtJwksObservabilitySnapshot;
+}
+
+export const DISABLED_REMOTE_JWT_JWKS_OBSERVABILITY: RemoteJwtJwksObservabilitySnapshot = {
+  enabled: false,
+  totalFetches: 0,
+  totalCacheHits: 0,
+  totalKidMissRefreshes: 0,
+  totalFetchFailures: 0,
+  cachedKeyCount: 0,
+  lastSuccessfulFetchAt: null,
+  lastFailedFetchAt: null,
+  cacheFreshUntilAt: null,
+};
+
 export interface JwtRemoteJwksVerifyOptions extends JwtVerifyCommonOptions {
   jwksResolver: JwtRemoteJwksResolver;
   jwks?: never;

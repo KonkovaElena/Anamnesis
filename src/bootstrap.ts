@@ -171,6 +171,7 @@ export function bootstrap(options?: BootstrapOptions) {
     rateLimitRpm: options?.rateLimitRpm,
     externalAttachmentFetcher,
     llmSidecar,
+    remoteJwtJwksTelemetry: remoteJwtJwksProvider,
   });
 
   return {

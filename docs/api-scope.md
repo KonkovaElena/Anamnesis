@@ -39,7 +39,7 @@ This is an organizational workflow API, not a diagnostic or treatment API.
 - `JWT_SECRET` enables HS256 bearer-token verification.
 - `JWT_PUBLIC_KEY` enables RS256 bearer-token verification with one PEM-encoded RSA public key.
 - `JWT_JWKS` enables RS256 bearer-token verification through a local JSON JWK Set with `kid`-aware key selection and staged overlap windows during restart-time key rotation.
-- `JWT_JWKS_URL` enables RS256 bearer-token verification through an issuer-bound remote JWKS fetched over `https`, cached using `Cache-Control` or `Expires`, revalidated with `ETag` and `Last-Modified` when stale, and refreshed immediately when a token references an unseen `kid`.
+- `JWT_JWKS_URL` enables RS256 bearer-token verification through an issuer-bound remote JWKS fetched over `https`, cached using `Cache-Control` or `Expires`, revalidated with `ETag` and `Last-Modified` when stale, refreshed immediately when a token references an unseen `kid`, and surfaced to operators through `/api/operations/summary` and `/metrics` counters.
 - `JWT_ISSUER` and `JWT_AUDIENCE` narrow acceptance to the intended issuer and recipient. `JWT_ISSUER` becomes required and must be an absolute `https` issuer URL on the same origin as `JWT_JWKS_URL` when remote JWKS mode is enabled.
 - `JWT_TYP` is optional and, when configured, requires a matching JOSE `typ` value such as `anamnesis+jwt`.
 - In `NODE_ENV=production`, weak JWT shared secrets are rejected at bootstrap; the current code requires at least 32 bytes of secret material.
@@ -85,10 +85,10 @@ This is an organizational workflow API, not a diagnostic or treatment API.
 | `/api/cases/{caseId}/physician-packets/{packetId}/finalize` | `POST` | Finalize a clinician-approved, non-stale packet. Under JWT, `finalizedBy` is bound to the authenticated `sub`, and the principal must hold `clinician`. |
 | `/api/cases/{caseId}/audit-events` | `GET` | Return append-only audit events by `caseId`. |
 | `/api/audit-chain/verify` | `GET` | Recompute and verify the SHA-256 audit hash chain for one case via `caseId` query parameter. |
-| `/api/operations/summary` | `GET` | Return aggregate workflow counts for cases, artifacts, packets, reviews, finalized packets, and audit events. Under JWT bearer auth, counts are scoped to JWT-accessible cases and their audit history. |
+| `/api/operations/summary` | `GET` | Return aggregate workflow counts for cases, artifacts, packets, reviews, finalized packets, and audit events. Under JWT bearer auth, counts are scoped to JWT-accessible cases and their audit history. When `JWT_JWKS_URL` is enabled, the payload also includes a `remoteJwks` snapshot with fetch, cache-hit, forced-refresh, failure, and freshness state. |
 | `/healthz` | `GET` | Liveness probe. |
 | `/readyz` | `GET` | Readiness probe; returns `503` during shutdown drain. |
-| `/metrics` | `GET` | Prometheus-style plain-text counters. |
+| `/metrics` | `GET` | Prometheus-style plain-text counters. When `JWT_JWKS_URL` is enabled, the output also includes remote verifier fetch, cache-hit, forced-refresh, failure, cached-key, and freshness timestamp gauges. |
 
 ## Normalization Profiles
 

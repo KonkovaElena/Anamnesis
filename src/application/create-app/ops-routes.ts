@@ -1,14 +1,15 @@
 import type { Express } from "express";
 import { verifyAuditChain } from "../../domain/anamnesis";
-import { loadOperationsSummary, renderMetrics, type RouteDependencies } from "./shared";
+import { loadOperationsSummary, readRemoteJwtJwksObservability, renderMetrics, type RouteDependencies } from "./shared";
 
 export function registerOpsRoutes(
   app: Express,
-  { store, auditStore, isShuttingDown }: RouteDependencies,
+  { store, auditStore, isShuttingDown, remoteJwtJwksTelemetry }: RouteDependencies,
 ): void {
   app.get("/api/operations/summary", async (request, response) => {
     response.json({
       summary: await loadOperationsSummary(store, auditStore, request.principal),
+      remoteJwks: readRemoteJwtJwksObservability(remoteJwtJwksTelemetry),
     });
   });
 
@@ -27,7 +28,7 @@ export function registerOpsRoutes(
 
   app.get("/metrics", async (_request, response) => {
     const summary = await loadOperationsSummary(store, auditStore);
-    response.type("text/plain").send(renderMetrics(summary));
+    response.type("text/plain").send(renderMetrics(summary, readRemoteJwtJwksObservability(remoteJwtJwksTelemetry)));
   });
 
   app.get("/api/audit-chain/verify", async (request, response) => {

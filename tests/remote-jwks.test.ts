@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createPublicKey, createSign, generateKeyPairSync } from "node:crypto";
 import test from "node:test";
 import { RemoteJwtJwksProvider } from "../src/infrastructure/RemoteJwtJwksProvider";
-import { withServer, jsonRequest } from "./helpers";
+import { withServer, jsonRequest, textRequest } from "./helpers";
 
 const {
   publicKey: PRIMARY_PUBLIC_KEY_PEM,
@@ -185,5 +185,130 @@ test("remote JWKS mode authenticates HTTP requests and binds validation to the c
         },
       });
     },
+  });
+});
+
+test("remote JWKS observability appears in operations summary and metrics after cache reuse", async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const token = createRs256KidJwt(
+    { sub: "clinician-remote", iss: "https://issuer.example.test", iat: now, exp: now + 3600 },
+    { kid: "rotation-primary" },
+  );
+
+  await withServer(async (baseUrl) => {
+    const first = await jsonRequest<{ cases: unknown[] }>(baseUrl, "/api/cases", {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    const second = await jsonRequest<{ cases: unknown[] }>(baseUrl, "/api/cases", {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(first.status, 200);
+    assert.equal(second.status, 200);
+
+    const summaryResponse = await jsonRequest<{
+      summary: { totalCases: number };
+      remoteJwks: {
+        enabled: boolean;
+        totalFetches: number;
+        totalCacheHits: number;
+        totalKidMissRefreshes: number;
+        totalFetchFailures: number;
+        cachedKeyCount: number;
+        lastSuccessfulFetchAt: string | null;
+        lastFailedFetchAt: string | null;
+        cacheFreshUntilAt: string | null;
+      };
+    }>(baseUrl, "/api/operations/summary", {
+      headers: { authorization: "Bearer ops-api-key" },
+    });
+    assert.equal(summaryResponse.status, 200);
+    assert.equal(summaryResponse.body.remoteJwks.enabled, true);
+    assert.equal(summaryResponse.body.remoteJwks.totalFetches, 1);
+    assert.equal(summaryResponse.body.remoteJwks.totalCacheHits, 1);
+    assert.equal(summaryResponse.body.remoteJwks.totalKidMissRefreshes, 0);
+    assert.equal(summaryResponse.body.remoteJwks.totalFetchFailures, 0);
+    assert.equal(summaryResponse.body.remoteJwks.cachedKeyCount, 1);
+    assert.match(summaryResponse.body.remoteJwks.lastSuccessfulFetchAt ?? "", /T/);
+    assert.equal(summaryResponse.body.remoteJwks.lastFailedFetchAt, null);
+    assert.match(summaryResponse.body.remoteJwks.cacheFreshUntilAt ?? "", /T/);
+
+    const metricsResponse = await textRequest(baseUrl, "/metrics");
+    assert.equal(metricsResponse.status, 200);
+    assert.match(metricsResponse.body, /anamnesis_remote_jwks_enabled 1/);
+    assert.match(metricsResponse.body, /anamnesis_remote_jwks_fetches_total 1/);
+    assert.match(metricsResponse.body, /anamnesis_remote_jwks_cache_hits_total 1/);
+    assert.match(metricsResponse.body, /anamnesis_remote_jwks_kid_miss_refreshes_total 0/);
+    assert.match(metricsResponse.body, /anamnesis_remote_jwks_fetch_failures_total 0/);
+    assert.match(metricsResponse.body, /anamnesis_remote_jwks_cached_keys 1/);
+  }, {
+    apiKey: "ops-api-key",
+    jwtIssuer: "https://issuer.example.test",
+    jwtJwksUrl: "https://issuer.example.test/.well-known/jwks.json",
+    jwtJwksFetchImplementation: async () => new Response(JSON.stringify({ keys: [PRIMARY_PUBLIC_JWK] }), {
+      status: 200,
+      headers: {
+        "content-type": "application/jwk-set+json",
+        "cache-control": "max-age=60",
+      },
+    }),
+  });
+});
+
+test("remote JWKS observability records fetch failures for operator visibility", async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const token = createRs256KidJwt(
+    { sub: "clinician-remote", iss: "https://issuer.example.test", iat: now, exp: now + 3600 },
+    { kid: "rotation-primary" },
+  );
+
+  await withServer(async (baseUrl) => {
+    const authResponse = await jsonRequest<{ code: string }>(baseUrl, "/api/cases", {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(authResponse.status, 401);
+    assert.equal(authResponse.body.code, "unauthorized");
+
+    const summaryResponse = await jsonRequest<{
+      summary: { totalCases: number };
+      remoteJwks: {
+        enabled: boolean;
+        totalFetches: number;
+        totalCacheHits: number;
+        totalKidMissRefreshes: number;
+        totalFetchFailures: number;
+        cachedKeyCount: number;
+        lastSuccessfulFetchAt: string | null;
+        lastFailedFetchAt: string | null;
+      };
+    }>(baseUrl, "/api/operations/summary", {
+      headers: { authorization: "Bearer ops-api-key" },
+    });
+    assert.equal(summaryResponse.status, 200);
+    assert.equal(summaryResponse.body.remoteJwks.enabled, true);
+    assert.equal(summaryResponse.body.remoteJwks.totalFetches, 1);
+    assert.equal(summaryResponse.body.remoteJwks.totalCacheHits, 0);
+    assert.equal(summaryResponse.body.remoteJwks.totalKidMissRefreshes, 0);
+    assert.equal(summaryResponse.body.remoteJwks.totalFetchFailures, 1);
+    assert.equal(summaryResponse.body.remoteJwks.cachedKeyCount, 0);
+    assert.equal(summaryResponse.body.remoteJwks.lastSuccessfulFetchAt, null);
+    assert.match(summaryResponse.body.remoteJwks.lastFailedFetchAt ?? "", /T/);
+
+    const metricsResponse = await textRequest(baseUrl, "/metrics");
+    assert.equal(metricsResponse.status, 200);
+    assert.match(metricsResponse.body, /anamnesis_remote_jwks_enabled 1/);
+    assert.match(metricsResponse.body, /anamnesis_remote_jwks_fetches_total 1/);
+    assert.match(metricsResponse.body, /anamnesis_remote_jwks_cache_hits_total 0/);
+    assert.match(metricsResponse.body, /anamnesis_remote_jwks_fetch_failures_total 1/);
+    assert.match(metricsResponse.body, /anamnesis_remote_jwks_cached_keys 0/);
+  }, {
+    apiKey: "ops-api-key",
+    jwtIssuer: "https://issuer.example.test",
+    jwtJwksUrl: "https://issuer.example.test/.well-known/jwks.json",
+    jwtJwksFetchImplementation: async () => new Response(null, {
+      status: 500,
+      headers: {
+        "cache-control": "no-store",
+      },
+    }),
   });
 });

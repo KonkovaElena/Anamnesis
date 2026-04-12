@@ -1,4 +1,9 @@
 import type { Request, Response } from "express";
+import {
+  DISABLED_REMOTE_JWT_JWKS_OBSERVABILITY,
+  type JwtRemoteJwksObservabilityReader,
+  type RemoteJwtJwksObservabilitySnapshot,
+} from "../../core/jwt-verification";
 import type {
   AnamnesisCase,
   AnamnesisStore,
@@ -22,6 +27,7 @@ export interface RouteDependencies {
   externalAttachmentFetcher?: ExternalAttachmentFetcher;
   llmSidecar?: LlmSidecar;
   isShuttingDown?: () => boolean;
+  remoteJwtJwksTelemetry?: JwtRemoteJwksObservabilityReader;
 }
 
 export function readRouteParam(value: string | string[] | undefined): string {
@@ -100,7 +106,25 @@ export async function loadOperationsSummary(
   return buildOperationsSummary(cases, { totalAuditEvents });
 }
 
-export function renderMetrics(summary: OperationsSummary): string {
+function toMetricTimestamp(value: string | null): number {
+  if (!value) {
+    return 0;
+  }
+
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp / 1_000 : 0;
+}
+
+export function readRemoteJwtJwksObservability(
+  telemetry?: JwtRemoteJwksObservabilityReader,
+): RemoteJwtJwksObservabilitySnapshot {
+  return telemetry?.getObservabilitySnapshot() ?? DISABLED_REMOTE_JWT_JWKS_OBSERVABILITY;
+}
+
+export function renderMetrics(
+  summary: OperationsSummary,
+  remoteJwks = DISABLED_REMOTE_JWT_JWKS_OBSERVABILITY,
+): string {
   const lines = [
     "# HELP anamnesis_cases_total Total number of anamnesis cases.",
     "# TYPE anamnesis_cases_total gauge",
@@ -122,6 +146,33 @@ export function renderMetrics(summary: OperationsSummary): string {
     `anamnesis_audit_events_total ${summary.totalAuditEvents}`,
     "# HELP anamnesis_cases_by_status Total cases by workflow status.",
     "# TYPE anamnesis_cases_by_status gauge",
+    "# HELP anamnesis_remote_jwks_enabled Whether issuer-bound remote JWKS verification is enabled.",
+    "# TYPE anamnesis_remote_jwks_enabled gauge",
+    `anamnesis_remote_jwks_enabled ${remoteJwks.enabled ? 1 : 0}`,
+    "# HELP anamnesis_remote_jwks_fetches_total Total remote JWKS fetch or revalidation attempts.",
+    "# TYPE anamnesis_remote_jwks_fetches_total gauge",
+    `anamnesis_remote_jwks_fetches_total ${remoteJwks.totalFetches}`,
+    "# HELP anamnesis_remote_jwks_cache_hits_total Total remote JWKS cache hits that avoided a network fetch.",
+    "# TYPE anamnesis_remote_jwks_cache_hits_total gauge",
+    `anamnesis_remote_jwks_cache_hits_total ${remoteJwks.totalCacheHits}`,
+    "# HELP anamnesis_remote_jwks_kid_miss_refreshes_total Total forced remote JWKS refreshes triggered by an unseen kid.",
+    "# TYPE anamnesis_remote_jwks_kid_miss_refreshes_total gauge",
+    `anamnesis_remote_jwks_kid_miss_refreshes_total ${remoteJwks.totalKidMissRefreshes}`,
+    "# HELP anamnesis_remote_jwks_fetch_failures_total Total remote JWKS fetch or revalidation failures.",
+    "# TYPE anamnesis_remote_jwks_fetch_failures_total gauge",
+    `anamnesis_remote_jwks_fetch_failures_total ${remoteJwks.totalFetchFailures}`,
+    "# HELP anamnesis_remote_jwks_cached_keys Current number of cached remote JWKS verifier keys.",
+    "# TYPE anamnesis_remote_jwks_cached_keys gauge",
+    `anamnesis_remote_jwks_cached_keys ${remoteJwks.cachedKeyCount}`,
+    "# HELP anamnesis_remote_jwks_last_success_timestamp_seconds Unix timestamp of the last successful remote JWKS fetch or revalidation.",
+    "# TYPE anamnesis_remote_jwks_last_success_timestamp_seconds gauge",
+    `anamnesis_remote_jwks_last_success_timestamp_seconds ${toMetricTimestamp(remoteJwks.lastSuccessfulFetchAt)}`,
+    "# HELP anamnesis_remote_jwks_last_failure_timestamp_seconds Unix timestamp of the last failed remote JWKS fetch or revalidation.",
+    "# TYPE anamnesis_remote_jwks_last_failure_timestamp_seconds gauge",
+    `anamnesis_remote_jwks_last_failure_timestamp_seconds ${toMetricTimestamp(remoteJwks.lastFailedFetchAt)}`,
+    "# HELP anamnesis_remote_jwks_cache_fresh_until_timestamp_seconds Unix timestamp until which the cached remote JWKS is considered fresh.",
+    "# TYPE anamnesis_remote_jwks_cache_fresh_until_timestamp_seconds gauge",
+    `anamnesis_remote_jwks_cache_fresh_until_timestamp_seconds ${toMetricTimestamp(remoteJwks.cacheFreshUntilAt)}`,
   ];
 
   for (const [status, count] of Object.entries(summary.statusCounts)) {

@@ -1,5 +1,12 @@
 import { TextDecoder } from "node:util";
-import { JwtVerificationError, assertJwtJwksStrength, type JwtJwkSet } from "../core/jwt-verification";
+import {
+  DISABLED_REMOTE_JWT_JWKS_OBSERVABILITY,
+  JwtVerificationError,
+  assertJwtJwksStrength,
+  type JwtJwkSet,
+  type JwtRemoteJwksObservabilityReader,
+  type RemoteJwtJwksObservabilitySnapshot,
+} from "../core/jwt-verification";
 
 const DEFAULT_TIMEOUT_MS = 5_000;
 const DEFAULT_MAX_BYTES = 256 * 1024;
@@ -142,7 +149,7 @@ function parseCacheDecision(headers: Headers, nowMs: number): CacheDecision {
   };
 }
 
-export class RemoteJwtJwksProvider {
+export class RemoteJwtJwksProvider implements JwtRemoteJwksObservabilityReader {
   private readonly jwksUrl: URL;
 
   private readonly fetchImplementation: typeof fetch;
@@ -155,6 +162,18 @@ export class RemoteJwtJwksProvider {
 
   private cache: CachedRemoteJwks | undefined;
 
+  private totalFetches = 0;
+
+  private totalCacheHits = 0;
+
+  private totalKidMissRefreshes = 0;
+
+  private totalFetchFailures = 0;
+
+  private lastSuccessfulFetchAt: string | null = null;
+
+  private lastFailedFetchAt: string | null = null;
+
   constructor(options: RemoteJwtJwksProviderOptions) {
     assertRemoteJwtJwksConfiguration(options.issuer, options.jwksUrl);
     this.jwksUrl = new URL(options.jwksUrl);
@@ -166,21 +185,42 @@ export class RemoteJwtJwksProvider {
 
   async getJwks(options?: { requiredKid?: string }): Promise<JwtJwkSet> {
     const requiredKid = normalizeKeyId(options?.requiredKid);
+    if (this.cache && !hasRequiredKid(this.cache.jwks, requiredKid)) {
+      this.totalKidMissRefreshes += 1;
+    }
+
     if (
       this.cache
       && this.cache.freshUntilMs > this.now()
       && hasRequiredKid(this.cache.jwks, requiredKid)
     ) {
+      this.totalCacheHits += 1;
       return this.cache.jwks;
     }
 
     return this.fetchRemoteJwks(requiredKid);
   }
 
+  getObservabilitySnapshot(): RemoteJwtJwksObservabilitySnapshot {
+    return {
+      ...DISABLED_REMOTE_JWT_JWKS_OBSERVABILITY,
+      enabled: true,
+      totalFetches: this.totalFetches,
+      totalCacheHits: this.totalCacheHits,
+      totalKidMissRefreshes: this.totalKidMissRefreshes,
+      totalFetchFailures: this.totalFetchFailures,
+      cachedKeyCount: this.cache?.jwks.keys.length ?? 0,
+      lastSuccessfulFetchAt: this.lastSuccessfulFetchAt,
+      lastFailedFetchAt: this.lastFailedFetchAt,
+      cacheFreshUntilAt: this.cache ? new Date(this.cache.freshUntilMs).toISOString() : null,
+    };
+  }
+
   private async fetchRemoteJwks(requiredKid: string | undefined): Promise<JwtJwkSet> {
     const abortController = new AbortController();
     const timeoutHandle = setTimeout(() => abortController.abort(), this.timeoutMs);
     const headers = new Headers({ accept: ACCEPT_HEADER });
+    this.totalFetches += 1;
 
     if (this.cache?.etag) {
       headers.set("if-none-match", this.cache.etag);
@@ -216,6 +256,7 @@ export class RemoteJwtJwksProvider {
               lastModified: response.headers.get("last-modified") ?? this.cache.lastModified,
             }
           : undefined;
+        this.lastSuccessfulFetchAt = new Date(this.now()).toISOString();
         return this.cache?.jwks ?? cachedJwks;
       }
 
@@ -261,6 +302,8 @@ export class RemoteJwtJwksProvider {
         this.cache = undefined;
       }
 
+      this.lastSuccessfulFetchAt = new Date(this.now()).toISOString();
+
       if (!hasRequiredKid(jwks, requiredKid)) {
         throw new JwtVerificationError(
           "unknown_key_id",
@@ -270,6 +313,13 @@ export class RemoteJwtJwksProvider {
 
       return jwks;
     } catch (error: unknown) {
+      if (error instanceof JwtVerificationError && error.code === "unknown_key_id") {
+        throw error;
+      }
+
+      this.totalFetchFailures += 1;
+      this.lastFailedFetchAt = new Date(this.now()).toISOString();
+
       if (error instanceof JwtVerificationError) {
         throw error;
       }

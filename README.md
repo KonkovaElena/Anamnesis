@@ -25,7 +25,7 @@ Anamnesis is designed as a narrow standalone slice for healthcare-adjacent workf
 - physician packet drafting from current case state;
 - explicit clinician review ledger (`approved`, `changes_requested`, `rejected`);
 - packet finalization only for clinician-approved, non-stale drafts;
-- append-only audit trail and operations summary;
+- append-only audit trail, operations summary, and remote-JWKS operational observability;
 - Bearer-token authentication via API key, HS256 shared secret, RS256 PEM public key, local kid-aware JWKS, or issuer-bound remote JWKS with cache-aware refresh; rate limiting, security headers, and graceful shutdown;
 - durable SQLite persistence with AES-256-GCM encryption at rest.
 
@@ -171,7 +171,7 @@ Operational probes:
 
 ## Deployment Notes
 
-- `/metrics` remains unauthenticated like `/healthz` and `/readyz`, so monitoring access should sit behind separate network controls when exposure beyond the local trust boundary is possible.
+- `/metrics` remains unauthenticated like `/healthz` and `/readyz`, so monitoring access should sit behind separate network controls when exposure beyond the local trust boundary is possible. When `JWT_JWKS_URL` is enabled, the metrics surface also includes remote verifier freshness, cache-hit, refresh, and failure counters.
 - If you enable `RATE_LIMIT_RPM` behind a reverse proxy or load balancer, configure Express proxy trust for the deployment topology before relying on `request.ip` for enforcement.
 
 ## Docker

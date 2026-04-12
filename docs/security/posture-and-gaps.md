@@ -44,6 +44,7 @@ This page is implementation-grounded. It does not claim security controls that a
 - `ALLOW_INSECURE_DEV_AUTH=true` is rejected when `NODE_ENV=production`.
 - In `NODE_ENV=production`, weak HS256 shared secrets are rejected at bootstrap; the current minimum is 32 bytes.
 - Weak RS256 verification keys are also rejected at bootstrap; the current minimum is an RSA public key with modulus length >= 2048 bits.
+- When `JWT_JWKS_URL` is enabled, `/api/operations/summary` and `/metrics` expose operator-visible remote verifier fetch, cache-hit, forced-refresh, failure, cached-key, and freshness state.
 - Under JWT bearer auth, newly created cases are owner-scoped to the authenticated subject, and non-owner JWT principals do not see or mutate those cases through case-bound routes.
 - A JWT case owner or an API-key operator can explicitly grant and revoke case access to another JWT principal.
 - Shared non-owner JWT principals can collaborate on case-bound reads and non-destructive writes, but cannot re-grant access, revoke access, delete cases, or remove source artifacts.
@@ -109,7 +110,7 @@ Minimum recommended deployment posture for the current slice:
 3. Set `RATE_LIMIT_RPM` to a non-zero value.
 4. Set `STORE_PATH` and `ENCRYPTION_KEY` together for durable encrypted storage.
 5. Use `EXTERNAL_ATTACHMENT_HOST_ALLOWLIST` if remote attachment fetch is enabled.
-6. Monitor `/readyz` and `/metrics` and treat them as operational surfaces, not business APIs.
+6. Monitor `/readyz` and `/metrics` and treat them as operational surfaces, not business APIs; when `JWT_JWKS_URL` is enabled, include the remote verifier counters in that monitoring baseline.
 7. Follow [backup-restore-and-key-rotation.md](backup-restore-and-key-rotation.md) for current backup and recovery procedure instead of improvising file copies or key changes.
 
 ## Public Claim Boundary
