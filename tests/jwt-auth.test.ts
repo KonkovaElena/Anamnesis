@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHmac, createSign, generateKeyPairSync } from "node:crypto";
+import { createHmac, createPublicKey, createSign, generateKeyPairSync } from "node:crypto";
 import test from "node:test";
 import { verifyJwt, JwtVerificationError } from "../src/core/jwt-verification";
 import { withServer, jsonRequest } from "./helpers";
@@ -28,6 +28,21 @@ const {
   publicKeyEncoding: { type: "spki", format: "pem" },
   privateKeyEncoding: { type: "pkcs8", format: "pem" },
 });
+const RS256_PUBLIC_JWK = {
+  ...(createPublicKey(RS256_PUBLIC_KEY_PEM).export({ format: "jwk" }) as JsonWebKey),
+  alg: "RS256",
+  use: "sig",
+  kid: "rotation-primary",
+};
+const RS256_OTHER_PUBLIC_JWK = {
+  ...(createPublicKey(RS256_OTHER_PUBLIC_KEY_PEM).export({ format: "jwk" }) as JsonWebKey),
+  alg: "RS256",
+  use: "sig",
+  kid: "rotation-secondary",
+};
+const RS256_JWKS = {
+  keys: [RS256_OTHER_PUBLIC_JWK, RS256_PUBLIC_JWK],
+};
 
 function base64UrlEncode(input: string | Buffer): string {
   const buf = typeof input === "string" ? Buffer.from(input, "utf8") : input;
@@ -56,6 +71,27 @@ function createRs256Jwt(
   const header = base64UrlEncode(JSON.stringify({ alg: "RS256", typ }));
   const body = base64UrlEncode(JSON.stringify(payload));
   const signature = createSign("RSA-SHA256").update(`${header}.${body}`).end().sign(privateKeyPem);
+  return `${header}.${body}.${base64UrlEncode(signature)}`;
+}
+
+function createRs256KidJwt(
+  payload: Record<string, unknown>,
+  options?: {
+    kid?: string;
+    privateKeyPem?: string;
+    typ?: string;
+  },
+): string {
+  const header = base64UrlEncode(JSON.stringify({
+    alg: "RS256",
+    typ: options?.typ ?? "JWT",
+    ...(options?.kid ? { kid: options.kid } : {}),
+  }));
+  const body = base64UrlEncode(JSON.stringify(payload));
+  const signature = createSign("RSA-SHA256")
+    .update(`${header}.${body}`)
+    .end()
+    .sign(options?.privateKeyPem ?? RS256_PRIVATE_KEY_PEM);
   return `${header}.${body}.${base64UrlEncode(signature)}`;
 }
 
@@ -98,6 +134,29 @@ test("verifyJwt rejects RS256 token when configured public key is too small", ()
   assert.throws(
     () => verifyJwt(token, { publicKeyPem: RS256_WEAK_PUBLIC_KEY_PEM }),
     (error: unknown) => error instanceof JwtVerificationError && error.code === "weak_verification_key",
+  );
+});
+
+test("verifyJwt succeeds with valid RS256 token against kid-aware JWKS", () => {
+  const now = Math.floor(Date.now() / 1000);
+  const token = createRs256KidJwt({ sub: "user-1", iat: now, exp: now + 3600 }, { kid: "rotation-primary" });
+  const payload = verifyJwt(token, { jwks: RS256_JWKS });
+  assert.equal(payload.sub, "user-1");
+});
+
+test("verifyJwt rejects RS256 token with unknown kid in JWKS", () => {
+  const token = createRs256KidJwt({ sub: "user-1" }, { kid: "missing-key" });
+  assert.throws(
+    () => verifyJwt(token, { jwks: RS256_JWKS }),
+    (error: unknown) => error instanceof JwtVerificationError && error.code === "unknown_key_id",
+  );
+});
+
+test("verifyJwt rejects RS256 token without kid when JWKS contains multiple keys", () => {
+  const token = createRs256KidJwt({ sub: "user-1" });
+  assert.throws(
+    () => verifyJwt(token, { jwks: RS256_JWKS }),
+    (error: unknown) => error instanceof JwtVerificationError && error.code === "missing_key_id",
   );
 });
 
@@ -240,6 +299,18 @@ test("RS256 JWT Bearer token authenticates against the API", async () => {
     });
     assert.equal(response.status, 200);
   }, { jwtPublicKey: RS256_PUBLIC_KEY_PEM });
+});
+
+test("kid-aware JWKS RS256 JWT Bearer token authenticates against the API", async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const token = createRs256KidJwt({ sub: "clinician-1", iat: now, exp: now + 3600 }, { kid: "rotation-primary" });
+
+  await withServer(async (baseUrl) => {
+    const response = await jsonRequest<{ cases: unknown[] }>(baseUrl, "/api/cases", {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(response.status, 200);
+  }, { jwtJwks: RS256_JWKS });
 });
 
 test("expired JWT returns 401", async () => {

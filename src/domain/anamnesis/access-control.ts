@@ -35,6 +35,49 @@ export function grantCasePrincipalAccess(
   };
 }
 
+export function revokeCasePrincipalAccess(
+  accessControl: CaseAccessControl,
+  principalId: string,
+): CaseAccessControl {
+  const normalizedPrincipalId = normalizePrincipalId(principalId);
+  if (normalizedPrincipalId.length === 0) {
+    throw new Error("principalId must be a non-empty string.");
+  }
+
+  if (normalizedPrincipalId === accessControl.ownerPrincipalId) {
+    throw new Error("ownerPrincipalId cannot be revoked.");
+  }
+
+  if (!accessControl.allowedPrincipalIds.includes(normalizedPrincipalId)) {
+    return accessControl;
+  }
+
+  return {
+    ...accessControl,
+    allowedPrincipalIds: accessControl.allowedPrincipalIds.filter((candidate) => candidate !== normalizedPrincipalId),
+  };
+}
+
+export function canPrincipalAdminCase(
+  record: Pick<AnamnesisCase, "accessControl">,
+  principal?: Pick<RequestPrincipal, "authMechanism" | "actorId">,
+): boolean {
+  if (!record.accessControl) {
+    return true;
+  }
+
+  if (!principal) {
+    return false;
+  }
+
+  if (principal.authMechanism === "api-key") {
+    return true;
+  }
+
+  return principal.authMechanism === "jwt-bearer"
+    && normalizePrincipalId(principal.actorId) === record.accessControl.ownerPrincipalId;
+}
+
 export function canPrincipalAccessCase(
   record: Pick<AnamnesisCase, "accessControl">,
   principal?: Pick<RequestPrincipal, "authMechanism" | "actorId">,

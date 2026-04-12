@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { once } from "node:events";
 import { bootstrap } from "./bootstrap";
 import { createGracefulShutdownHandler } from "./graceful-shutdown";
+import type { JwtJwkSet } from "./core/jwt-verification";
 
 function resolvePort(): number {
   const rawValue = process.env.PORT ?? "4020";
@@ -14,12 +15,26 @@ function resolvePort(): number {
   return port;
 }
 
+function parseJwtJwksEnv(rawValue: string | undefined): JwtJwkSet | undefined {
+  const normalized = rawValue?.trim();
+  if (!normalized) {
+    return undefined;
+  }
+
+  try {
+    return JSON.parse(normalized) as JwtJwkSet;
+  } catch {
+    throw new Error("JWT_JWKS must be valid JSON containing a JWK Set object.");
+  }
+}
+
 async function main() {
   let shuttingDown = false;
 
   const apiKey = process.env.API_KEY?.trim() || undefined;
   const jwtSecret = process.env.JWT_SECRET?.trim() || undefined;
   const jwtPublicKey = process.env.JWT_PUBLIC_KEY?.replace(/\\n/g, "\n").trim() || undefined;
+  const jwtJwks = parseJwtJwksEnv(process.env.JWT_JWKS);
   const jwtIssuer = process.env.JWT_ISSUER?.trim() || undefined;
   const jwtAudience = process.env.JWT_AUDIENCE?.trim() || undefined;
   const jwtTyp = process.env.JWT_TYP?.trim() || undefined;
@@ -33,9 +48,9 @@ async function main() {
     .map((value) => value.trim().toLowerCase())
     .filter((value) => value.length > 0);
 
-  if (!apiKey && !jwtSecret && !jwtPublicKey && allowInsecureDevAuth) {
+  if (!apiKey && !jwtSecret && !jwtPublicKey && !jwtJwks && allowInsecureDevAuth) {
     process.stdout.write(
-      "[WARN] API_KEY, JWT_SECRET, and JWT_PUBLIC_KEY are not set — unauthenticated access is enabled only because ALLOW_INSECURE_DEV_AUTH=true was explicitly configured.\n",
+      "[WARN] API_KEY, JWT_SECRET, JWT_PUBLIC_KEY, and JWT_JWKS are not set — unauthenticated access is enabled only because ALLOW_INSECURE_DEV_AUTH=true was explicitly configured.\n",
     );
   }
 
@@ -48,6 +63,7 @@ async function main() {
     apiKey,
     jwtSecret,
     jwtPublicKey,
+    jwtJwks,
     jwtIssuer,
     jwtAudience,
     jwtTyp,

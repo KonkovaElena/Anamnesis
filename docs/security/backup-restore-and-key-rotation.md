@@ -27,14 +27,14 @@ This runbook covers:
 
 - the SQLite case store behind `STORE_PATH`;
 - the AES-256-GCM store key provided through `ENCRYPTION_KEY`;
-- application auth material provided through `API_KEY`, `JWT_SECRET`, or `JWT_PUBLIC_KEY`;
+- application auth material provided through `API_KEY`, `JWT_SECRET`, `JWT_PUBLIC_KEY`, or `JWT_JWKS`;
 - the current manual restore and restart workflow.
 
 This runbook does not claim:
 
 - automated backup scheduling;
 - in-place encrypted-store key rotation;
-- JWKS or `kid`-aware JWT rollover;
+- HTTPS-fetched JWKS or automated issuer-bound JWT rollover;
 - detached audit export or external notarization;
 - full disaster-recovery orchestration.
 
@@ -46,7 +46,8 @@ This runbook does not claim:
 | Restore from encrypted SQLite backup | Yes | Requires the same `ENCRYPTION_KEY` that was used for the backup. |
 | Restart-time `API_KEY` rotation | Yes | Old token stops working after restart. |
 | Restart-time `JWT_SECRET` replacement | Yes | Requires coordinated issuer and verifier cutover. |
-| Restart-time `JWT_PUBLIC_KEY` replacement | Yes | Single-key verifier only; no built-in overlap window. |
+| Restart-time `JWT_PUBLIC_KEY` replacement | Yes | Single-key verifier only; use `JWT_JWKS` when an overlap window is required. |
+| Restart-time `JWT_JWKS` replacement | Yes | Supports local `kid`-aware overlap windows when old and new keys coexist in the configured JWKS during restart-time rotation. |
 | In-place `ENCRYPTION_KEY` rotation for existing data | No | Repository does not ship multi-key decrypt or re-encryption tooling. |
 | Automatic backup verification and restore drill scheduling | No | Must be performed operationally outside the repository. |
 
@@ -164,7 +165,19 @@ Current rotation model:
 4. verify a token signed by the new private key succeeds;
 5. verify a token signed by the old private key fails if the issuer is no longer supposed to trust it.
 
-The current repository accepts one verifier key only. There is no built-in `kid` routing, JWKS fetch, or overlap window.
+The current repository accepts one verifier key only in this mode. There is no overlap window unless you switch to `JWT_JWKS`.
+
+### `JWT_JWKS`
+
+Current rotation model:
+
+1. add the replacement public key to `JWT_JWKS` with a unique `kid` while keeping the retiring key present;
+2. restart Anamnesis with the updated `JWT_JWKS` value;
+3. verify tokens signed under both the retiring and replacement `kid` succeed during the intended overlap window;
+4. after issuer cutover, remove the retired key from `JWT_JWKS` and restart again;
+5. verify tokens signed under the retired `kid` now fail.
+
+The current repository accepts a local JSON JWK Set only. There is no built-in HTTPS JWKS fetch, cache validation, or automatic refresh.
 
 ### `ENCRYPTION_KEY`
 

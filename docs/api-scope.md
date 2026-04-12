@@ -19,24 +19,26 @@ This is an organizational workflow API, not a diagnostic or treatment API.
 ## Authentication Model
 
 - Application endpoints use `Authorization: Bearer <API_KEY>` when `API_KEY` is configured.
-- Application endpoints also accept `Authorization: Bearer <JWT>` when `JWT_SECRET` or `JWT_PUBLIC_KEY` is configured.
-- `JWT_SECRET` and `JWT_PUBLIC_KEY` are mutually exclusive JWT verifier modes.
+- Application endpoints also accept `Authorization: Bearer <JWT>` when `JWT_SECRET`, `JWT_PUBLIC_KEY`, or `JWT_JWKS` is configured.
+- `JWT_SECRET`, `JWT_PUBLIC_KEY`, and `JWT_JWKS` are mutually exclusive JWT verifier modes.
 - When `API_KEY` and one JWT verifier mode are configured, either bearer mechanism may be used.
 - JWT bearer validation requires a non-empty `sub`, enforces configured `JWT_ISSUER` and `JWT_AUDIENCE` when present, rejects malformed `roles`, and honors `nbf` in addition to `iat`/`exp`.
 - When `JWT_TYP` is configured, JWTs must also carry a matching JOSE `typ` value.
-- Startup without `API_KEY`, `JWT_SECRET`, or `JWT_PUBLIC_KEY` is rejected unless `ALLOW_INSECURE_DEV_AUTH=true` is explicitly set.
+- Startup without `API_KEY`, `JWT_SECRET`, `JWT_PUBLIC_KEY`, or `JWT_JWKS` is rejected unless `ALLOW_INSECURE_DEV_AUTH=true` is explicitly set.
 - `ALLOW_INSECURE_DEV_AUTH=true` is rejected when `NODE_ENV=production`.
 - `GET /healthz`, `GET /readyz`, and `GET /metrics` remain unauthenticated even when bearer auth is enabled.
 - Under JWT bearer auth, the packet workflow treats the authenticated JWT `sub` as the trusted workflow actor for `requestedBy`, `reviewerName`, and `finalizedBy` rather than trusting arbitrary body strings.
 - Under JWT bearer auth, packet review requires the `reviewer` or `clinician` role, and packet finalization requires the `clinician` role.
 - Under JWT bearer auth, newly created cases are owner-scoped to the authenticated subject; non-owner JWT principals do not see those cases in listing results and receive `404` on direct case-bound reads and writes.
-- A JWT case owner or an API-key operator can grant case access to another JWT principal through `POST /api/cases/{caseId}/access-grants`.
+- A JWT case owner or an API-key operator can grant case access to another JWT principal through `POST /api/cases/{caseId}/access-grants` and revoke it through `DELETE /api/cases/{caseId}/access-grants/{principalId}`.
+- Shared non-owner JWT principals can collaborate on case-bound reads and non-destructive writes, but cannot re-grant access, revoke access, delete a case, or remove source artifacts.
 - API-key bearer auth remains the shared-secret operator path and retains access to JWT-owned cases.
 
 ## Auth Configuration Surface
 
 - `JWT_SECRET` enables HS256 bearer-token verification.
-- `JWT_PUBLIC_KEY` enables RS256 bearer-token verification with a PEM-encoded RSA public key.
+- `JWT_PUBLIC_KEY` enables RS256 bearer-token verification with one PEM-encoded RSA public key.
+- `JWT_JWKS` enables RS256 bearer-token verification through a local JSON JWK Set with `kid`-aware key selection and staged overlap windows during restart-time key rotation.
 - `JWT_ISSUER` and `JWT_AUDIENCE` narrow acceptance to the intended issuer and recipient.
 - `JWT_TYP` is optional and, when configured, requires a matching JOSE `typ` value such as `anamnesis+jwt`.
 - In `NODE_ENV=production`, weak JWT shared secrets are rejected at bootstrap; the current code requires at least 32 bytes of secret material.
@@ -65,6 +67,7 @@ This is an organizational workflow API, not a diagnostic or treatment API.
 | `/api/cases/{caseId}` | `GET` | Return one case by id. |
 | `/api/cases/{caseId}` | `DELETE` | Delete a case and append `case.deleted` to the audit trail. |
 | `/api/cases/{caseId}/access-grants` | `POST` | Add another JWT principal to the case access list. Allowed to the JWT case owner or an API-key operator only. |
+| `/api/cases/{caseId}/access-grants/{principalId}` | `DELETE` | Revoke another JWT principal from the case access list. Allowed to the JWT case owner or an API-key operator only. |
 | `/api/cases/{caseId}/artifacts` | `POST` | Register a source artifact and stale any active packet drafts. |
 | `/api/cases/{caseId}/artifacts/{artifactId}` | `DELETE` | Remove a source artifact and stale any active packet drafts. |
 | `/api/cases/{caseId}/evidence-lineage` | `GET` | Return a read-only artifact lineage graph plus artifact summary metadata for the case. |
@@ -106,7 +109,8 @@ Document and FHIR import responses now expose explicit profile metadata so clien
 - `correlationId` records the originating HTTP request correlation and mirrors the `x-request-id` header assigned when the event was created through the API.
 - `causationId` is optional and reserved for future chained event flows.
 - `actorId` is populated from the authenticated bearer principal when the route does not already provide a domain-specific actor; JWT-backed packet draft/review/finalize routes also bind their actor-bearing fields to the authenticated subject instead of trusting the request body.
-- `case.shared` audit events record `details.sharedPrincipalId` for grant-only sharing actions.
+- `case.shared` audit events record `details.sharedPrincipalId` for grant actions.
+- `case.unshared` audit events record `details.revokedPrincipalId` for revoke actions.
 - ingestion-related audit events include normalization and import profile metadata inside `details`.
 - extraction-related audit events cover sample registration, study-context attachment, and QC-summary recording.
 - evidence-lineage reads are intentionally read-only and do not emit audit events in the current slice.
@@ -116,6 +120,7 @@ Document and FHIR import responses now expose explicit profile metadata so clien
 - New cases start in `INTAKING`.
 - New cases can declare `GENERAL_INTAKE`, `MRI_SECOND_OPINION`, or `MRNA_BOARD_REVIEW` as their workflow family.
 - Sample registration, study-context attachment, and QC-summary recording enrich packet drafts but do not by themselves approve or finalize packets.
+- Shared JWT principals can participate in case-bound collaboration, but destructive case-admin actions remain limited to the case owner or API-key operator.
 - Adding or ingesting evidence moves a case toward packet readiness and marks existing packets stale.
 - Packets are always draft workflow artifacts, not diagnoses or treatment plans.
 - Reviews append immutable ledger entries to the packet.
@@ -163,6 +168,7 @@ Bundle attachment dereference is allowed only when all of the following are true
 ## Important Asymmetries
 
 - `GET /api/cases/{caseId}/audit-events` is keyed to the append-only audit store, not to current case existence. Deleted cases can still return audit history.
+- For deleted cases under JWT bearer auth, audit visibility is reconstructed from `case.created`, `case.shared`, and `case.unshared` history, so revoked principals do not retain deleted-case audit access.
 - `GET /api/cases/{caseId}/audit-events` now exposes correlation-aware event metadata suitable for tracing one request across case, artifact, review, and finalization transitions.
 - `GET /api/cases/{caseId}/evidence-lineage` is keyed to current case existence and returns `404 case_not_found` rather than an empty graph when the case is missing.
 - `GET /metrics` is unauthenticated, but unlike `/healthz` and `/readyz` it is still subject to rate limiting when `RATE_LIMIT_RPM` is enabled.

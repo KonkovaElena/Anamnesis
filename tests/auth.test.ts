@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { createServer } from "node:http";
-import { generateKeyPairSync } from "node:crypto";
+import { createPublicKey, generateKeyPairSync } from "node:crypto";
 import { type AddressInfo } from "node:net";
 import test from "node:test";
 import { createApp } from "../src/application/create-app";
@@ -152,6 +152,32 @@ test("bootstrap rejects mixed JWT secret and public key configuration", () => {
   );
 });
 
+test("bootstrap rejects mixed JWT public key and JWKS configuration", () => {
+  const { publicKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: "spki", format: "pem" },
+    privateKeyEncoding: { type: "pkcs8", format: "pem" },
+  });
+
+  const jwtJwks = {
+    keys: [{
+      ...(createPublicKey(publicKey).export({ format: "jwk" }) as JsonWebKey),
+      alg: "RS256",
+      use: "sig",
+      kid: "rotation-primary",
+    }],
+  };
+
+  assert.throws(
+    () =>
+      bootstrap({
+        jwtPublicKey: publicKey,
+        jwtJwks,
+      }),
+    /JWT_PUBLIC_KEY.*JWT_JWKS|JWT_JWKS.*JWT_PUBLIC_KEY/i,
+  );
+});
+
 test("bootstrap rejects weak JWT public key", () => {
   const { publicKey } = generateKeyPairSync("rsa", {
     modulusLength: 1024,
@@ -192,6 +218,52 @@ test("bootstrap accepts strong JWT public key in production", () => {
 
   assert.ok(result.app);
   result.closeStore?.();
+});
+
+test("bootstrap accepts strong JWT JWKS in production", () => {
+  const { publicKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: "spki", format: "pem" },
+    privateKeyEncoding: { type: "pkcs8", format: "pem" },
+  });
+
+  const result = bootstrap({
+    jwtJwks: {
+      keys: [{
+        ...(createPublicKey(publicKey).export({ format: "jwk" }) as JsonWebKey),
+        alg: "RS256",
+        use: "sig",
+        kid: "rotation-primary",
+      }],
+    },
+    nodeEnv: "production",
+  });
+
+  assert.ok(result.app);
+  result.closeStore?.();
+});
+
+test("bootstrap rejects weak JWT JWKS key", () => {
+  const { publicKey } = generateKeyPairSync("rsa", {
+    modulusLength: 1024,
+    publicKeyEncoding: { type: "spki", format: "pem" },
+    privateKeyEncoding: { type: "pkcs8", format: "pem" },
+  });
+
+  assert.throws(
+    () =>
+      bootstrap({
+        jwtJwks: {
+          keys: [{
+            ...(createPublicKey(publicKey).export({ format: "jwk" }) as JsonWebKey),
+            alg: "RS256",
+            use: "sig",
+            kid: "weak-rotation-key",
+          }],
+        },
+      }),
+    /public key|RSA|2048/i,
+  );
 });
 
 test("request with non-Bearer auth scheme returns 401", async () => {

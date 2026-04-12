@@ -12,11 +12,12 @@ info:
 
     Authentication model:
     - application endpoints expect `Authorization: Bearer <API_KEY>` when `API_KEY` is configured;
-    - application endpoints also accept `Authorization: Bearer <JWT>` when `JWT_SECRET` or `JWT_PUBLIC_KEY` is configured;
-    - `JWT_SECRET` and `JWT_PUBLIC_KEY` are mutually exclusive JWT verifier modes;
+    - application endpoints also accept `Authorization: Bearer <JWT>` when `JWT_SECRET`, `JWT_PUBLIC_KEY`, or `JWT_JWKS` is configured;
+    - `JWT_SECRET`, `JWT_PUBLIC_KEY`, and `JWT_JWKS` are mutually exclusive JWT verifier modes;
     - when `API_KEY` and one JWT verifier mode are configured, either bearer mechanism may be used;
     - JWTs must carry a non-empty `sub`, must satisfy configured `iss`/`aud` constraints, and may additionally be required to match a configured JOSE `typ` value;
-    - `JWT_PUBLIC_KEY` enables RS256 verification and requires an RSA public key with modulus length >= 2048 bits;
+    - `JWT_PUBLIC_KEY` enables RS256 verification with one active verifier key and requires an RSA public key with modulus length >= 2048 bits;
+    - `JWT_JWKS` enables RS256 verification through a local JWK Set with `kid`-aware key selection and staged overlap during restart-time key rotation;
     - unauthenticated startup is allowed only when `ALLOW_INSECURE_DEV_AUTH=true` is explicitly set;
     - the insecure development override is rejected when `NODE_ENV=production`.
 
@@ -164,6 +165,32 @@ paths:
                 $ref: '#/components/schemas/CaseEnvelope'
         '400':
           $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+  /api/cases/{caseId}/access-grants/{principalId}:
+    parameters:
+      - $ref: '#/components/parameters/CaseId'
+      - $ref: '#/components/parameters/PrincipalId'
+    delete:
+      tags: [Cases]
+      summary: Revoke case access
+      operationId: revokeCaseAccess
+      description: Remove another JWT principal from the case access list. Allowed to the JWT case owner or an API-key operator only.
+      responses:
+        '200':
+          description: Case access revoked and updated case returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseEnvelope'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '403':
@@ -691,7 +718,7 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: JWT bearer token validated via HS256 when `JWT_SECRET` is configured or via RS256 when `JWT_PUBLIC_KEY` is configured. Runtime validation enforces signature, `exp`, `iat`, `nbf`, non-empty `sub`, configured `iss`/`aud`, optional JOSE `typ`, and an RSA-2048 minimum for RS256 verification keys.
+      description: JWT bearer token validated via HS256 when `JWT_SECRET` is configured, via RS256 when `JWT_PUBLIC_KEY` is configured, or via RS256 local JWKS selection when `JWT_JWKS` is configured. Runtime validation enforces signature, `exp`, `iat`, `nbf`, non-empty `sub`, configured `iss`/`aud`, optional JOSE `typ`, and an RSA-2048 minimum for RS256 verification keys.
   parameters:
     CaseId:
       name: caseId
@@ -717,6 +744,15 @@ components:
       schema:
         type: string
         format: uuid
+    PrincipalId:
+      name: principalId
+      in: path
+      required: true
+      description: JWT principal identifier to revoke from the case access list.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 200
     Limit:
       name: limit
       in: query
@@ -1362,6 +1398,7 @@ components:
           enum:
             - case.created
             - case.shared
+            - case.unshared
             - sample.registered
             - artifact.added
             - artifact.removed
@@ -1505,11 +1542,13 @@ components:
       type: object
       additionalProperties: false
       required: [ownerPrincipalId, allowedPrincipalIds]
+      description: Owner-scoped JWT access list. The owner principal is always included in `allowedPrincipalIds` and destructive case-admin actions remain owner-or-operator only.
       properties:
         ownerPrincipalId:
           type: string
         allowedPrincipalIds:
           type: array
+          description: JWT principals that currently retain case-bound access, including the owner.
           items:
             type: string
     CaseListResponse:
@@ -1699,6 +1738,7 @@ components:
       type: object
       additionalProperties: false
       required: [principalId]
+      description: JWT principal identifier to add to the case access list.
       properties:
         principalId:
           type: string

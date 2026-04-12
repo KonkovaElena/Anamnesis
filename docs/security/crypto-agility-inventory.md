@@ -59,7 +59,7 @@ The Anamnesis slice does not use:
 - Diffie-Hellman key exchange;
 - TLS termination (handled by deployment infrastructure).
 
-The standalone can now verify RS256 JWT signatures when `JWT_PUBLIC_KEY` is configured. This means classical RSA is part of the runtime trust model even though the repository does not mint JWTs or store RSA private signing keys itself.
+The standalone can now verify RS256 JWT signatures when `JWT_PUBLIC_KEY` or `JWT_JWKS` is configured. This means classical RSA is part of the runtime trust model even though the repository does not mint JWTs or store RSA private signing keys itself.
 
 Therefore the NIST 2035 deprecation horizon for vulnerable asymmetric primitives is no longer completely irrelevant to the auth surface. Immediate migration is not required for the current narrow standalone scope, but any long-lived operator posture built around RS256 should preserve a migration path toward stronger asymmetric algorithms and rotating public-key distribution.
 
@@ -110,12 +110,11 @@ This is not planned for the current release but is documented here so the future
 
 ### Phase E: Asymmetric JWT Key Rotation
 
-The current asymmetric auth posture uses a static `JWT_PUBLIC_KEY` verifier input. A stronger operator model should move toward issuer-bound key rollover:
+The current asymmetric auth posture uses either a static `JWT_PUBLIC_KEY` verifier input or a local `JWT_JWKS` verifier input. The repository already supports `kid`-aware key selection across a local JWKS, which enables manual overlap windows during restart-time rollover. A stronger operator model should move next toward issuer-bound key rollover:
 
-1. add `kid`-aware key selection instead of a single static verifier key;
-2. support HTTPS-retrieved JWK or JWKS documents with issuer binding and cache control;
-3. allow staged overlap windows so old and new signing keys can coexist during rollover;
-4. prefer algorithms with a clearer forward migration path once interoperability permits.
+1. support HTTPS-retrieved JWK or JWKS documents with issuer binding and cache control;
+2. allow automatic refresh and retirement of signing keys rather than restart-time local JSON replacement;
+3. prefer algorithms with a clearer forward migration path once interoperability permits.
 
 ## Constant-Time Comparison Note
 

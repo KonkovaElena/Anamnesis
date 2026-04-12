@@ -18,6 +18,18 @@ interface JwtVerifyCommonOptions {
   expectedTyp?: string;
 }
 
+export interface JwtRsaJwk extends JsonWebKey {
+  alg?: string;
+  kid?: string;
+  key_ops?: string[];
+  kty?: string;
+  use?: string;
+}
+
+export interface JwtJwkSet {
+  keys: JwtRsaJwk[];
+}
+
 export interface JwtHmacVerifyOptions extends JwtVerifyCommonOptions {
   secret: string;
   publicKeyPem?: never;
@@ -26,11 +38,19 @@ export interface JwtHmacVerifyOptions extends JwtVerifyCommonOptions {
 export interface JwtRsaVerifyOptions extends JwtVerifyCommonOptions {
   publicKeyPem: string;
   secret?: never;
+  jwks?: never;
 }
 
-export type JwtVerifyOptions = JwtHmacVerifyOptions | JwtRsaVerifyOptions;
+export interface JwtRsaJwksVerifyOptions extends JwtVerifyCommonOptions {
+  jwks: JwtJwkSet;
+  publicKeyPem?: never;
+  secret?: never;
+}
+
+export type JwtVerifyOptions = JwtHmacVerifyOptions | JwtRsaVerifyOptions | JwtRsaJwksVerifyOptions;
 
 const jwtPublicKeyCache = new Map<string, KeyObject>();
+const jwtJwkKeyCache = new Map<string, KeyObject>();
 
 export class JwtVerificationError extends Error {
   constructor(
@@ -55,8 +75,16 @@ function isHmacVerifyOptions(options: JwtVerifyOptions): options is JwtHmacVerif
   return typeof (options as JwtHmacVerifyOptions).secret === "string";
 }
 
+function isJwksVerifyOptions(options: JwtVerifyOptions): options is JwtRsaJwksVerifyOptions {
+  return Array.isArray((options as JwtRsaJwksVerifyOptions).jwks?.keys);
+}
+
 function getSupportedAlgorithms(options: JwtVerifyOptions): string[] {
   return isHmacVerifyOptions(options) ? ["HS256"] : ["RS256"];
+}
+
+function normalizeKeyId(kid: unknown): string | undefined {
+  return typeof kid === "string" && kid.trim().length > 0 ? kid.trim() : undefined;
 }
 
 function getRsaPublicKey(publicKeyPem: string): KeyObject {
@@ -94,12 +122,156 @@ function getRsaPublicKey(publicKeyPem: string): KeyObject {
   return publicKey;
 }
 
+function assertJwtJwkMetadata(jwk: JwtRsaJwk): void {
+  if (jwk.kty !== "RSA") {
+    throw new JwtVerificationError(
+      "invalid_verification_key",
+      "Configured JWT JWKS key must use kty=\"RSA\" for RS256 verification.",
+    );
+  }
+
+  if (jwk.use !== undefined && jwk.use !== "sig") {
+    throw new JwtVerificationError(
+      "invalid_verification_key",
+      "Configured JWT JWKS key must use use=\"sig\" when the use field is present.",
+    );
+  }
+
+  if (jwk.alg !== undefined && jwk.alg !== "RS256") {
+    throw new JwtVerificationError(
+      "invalid_verification_key",
+      "Configured JWT JWKS key must use alg=\"RS256\" when the alg field is present.",
+    );
+  }
+
+  if (jwk.key_ops !== undefined) {
+    if (!Array.isArray(jwk.key_ops) || jwk.key_ops.some((operation) => typeof operation !== "string")) {
+      throw new JwtVerificationError(
+        "invalid_verification_key",
+        "Configured JWT JWKS key_ops must be an array of strings.",
+      );
+    }
+
+    if (!jwk.key_ops.includes("verify")) {
+      throw new JwtVerificationError(
+        "invalid_verification_key",
+        "Configured JWT JWKS key_ops must include \"verify\".",
+      );
+    }
+  }
+}
+
+function getJwtJwkCacheKey(jwk: JwtRsaJwk): string {
+  const normalizedKid = normalizeKeyId(jwk.kid);
+  if (normalizedKid) {
+    return `kid:${normalizedKid}:${jwk.n ?? ""}`;
+  }
+
+  return `jwk:${JSON.stringify(jwk)}`;
+}
+
+function getRsaPublicKeyFromJwk(jwk: JwtRsaJwk): KeyObject {
+  assertJwtJwkMetadata(jwk);
+
+  const cacheKey = getJwtJwkCacheKey(jwk);
+  const cached = jwtJwkKeyCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  let publicKey: KeyObject;
+  try {
+    publicKey = createPublicKey({ key: jwk, format: "jwk" });
+  } catch {
+    throw new JwtVerificationError(
+      "invalid_verification_key",
+      "Configured JWT JWKS key is not a valid RSA public JWK.",
+    );
+  }
+
+  if (publicKey.asymmetricKeyType !== "rsa") {
+    throw new JwtVerificationError(
+      "invalid_verification_key",
+      `Configured JWT JWKS key must be RSA for RS256; got "${publicKey.asymmetricKeyType}".`,
+    );
+  }
+
+  const modulusLength = publicKey.asymmetricKeyDetails?.modulusLength;
+  if (!modulusLength || modulusLength < 2048) {
+    throw new JwtVerificationError(
+      "weak_verification_key",
+      "Configured JWT JWKS key must be RSA 2048 bits or stronger for RS256.",
+    );
+  }
+
+  jwtJwkKeyCache.set(cacheKey, publicKey);
+  return publicKey;
+}
+
 export function assertJwtPublicKeyStrength(publicKeyPem: string): void {
   getRsaPublicKey(publicKeyPem);
 }
 
+export function assertJwtJwksStrength(jwks: JwtJwkSet): void {
+  if (!Array.isArray(jwks.keys) || jwks.keys.length === 0) {
+    throw new JwtVerificationError(
+      "invalid_verification_key",
+      "Configured JWT_JWKS must contain a non-empty keys array.",
+    );
+  }
+
+  const seenKids = new Set<string>();
+  const requireKids = jwks.keys.length > 1;
+  for (const jwk of jwks.keys) {
+    const normalizedKid = normalizeKeyId(jwk.kid);
+    if (requireKids && !normalizedKid) {
+      throw new JwtVerificationError(
+        "invalid_verification_key",
+        "Configured JWT_JWKS must provide a non-empty kid for every key when multiple keys are configured.",
+      );
+    }
+
+    if (normalizedKid) {
+      if (seenKids.has(normalizedKid)) {
+        throw new JwtVerificationError(
+          "invalid_verification_key",
+          `Configured JWT_JWKS contains duplicate kid "${normalizedKid}".`,
+        );
+      }
+      seenKids.add(normalizedKid);
+    }
+
+    getRsaPublicKeyFromJwk(jwk);
+  }
+}
+
+function selectJwtJwk(jwks: JwtJwkSet, headerKid?: string): JwtRsaJwk {
+  const normalizedHeaderKid = normalizeKeyId(headerKid);
+  if (normalizedHeaderKid) {
+    const matchingKey = jwks.keys.find((candidate) => normalizeKeyId(candidate.kid) === normalizedHeaderKid);
+    if (!matchingKey) {
+      throw new JwtVerificationError(
+        "unknown_key_id",
+        `JWT kid "${normalizedHeaderKid}" does not match any configured verification key.`,
+      );
+    }
+
+    return matchingKey;
+  }
+
+  if (jwks.keys.length === 1) {
+    return jwks.keys[0]!;
+  }
+
+  throw new JwtVerificationError(
+    "missing_key_id",
+    "JWT header must include kid when multiple verification keys are configured.",
+  );
+}
+
 function verifyJwtSignature(
   headerAlg: string,
+  headerKid: string | undefined,
   signatureInput: string,
   signatureB64: string,
   options: JwtVerifyOptions,
@@ -133,7 +305,9 @@ function verifyJwtSignature(
       );
     }
 
-    const publicKey = getRsaPublicKey(options.publicKeyPem);
+    const publicKey = isJwksVerifyOptions(options)
+      ? getRsaPublicKeyFromJwk(selectJwtJwk(options.jwks, headerKid))
+      : getRsaPublicKey(options.publicKeyPem);
     const isValid = verifySignature(
       "RSA-SHA256",
       Buffer.from(signatureInput, "utf8"),
@@ -162,7 +336,7 @@ export function verifyJwt(token: string, options: JwtVerifyOptions): JwtPayload 
 
   const [headerB64, payloadB64, signatureB64] = parts as [string, string, string];
 
-  let header: { alg?: string; typ?: string };
+  let header: { alg?: string; typ?: string; kid?: string };
   try {
     header = JSON.parse(base64UrlDecode(headerB64).toString("utf8"));
   } catch {
@@ -178,7 +352,7 @@ export function verifyJwt(token: string, options: JwtVerifyOptions): JwtPayload 
   }
 
   const signatureInput = `${headerB64}.${payloadB64}`;
-  verifyJwtSignature(header.alg, signatureInput, signatureB64, options);
+  verifyJwtSignature(header.alg, header.kid, signatureInput, signatureB64, options);
 
   let payload: JwtPayload;
   try {

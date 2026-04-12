@@ -53,6 +53,22 @@ async function grantCaseAccess(
   );
 }
 
+async function revokeCaseAccess(
+  baseUrl: string,
+  caseId: string,
+  principalId: string,
+  headers: Record<string, string>,
+) {
+  return jsonRequest<{ case: { accessControl?: { allowedPrincipalIds: string[] } } }>(
+    baseUrl,
+    `/api/cases/${caseId}/access-grants/${encodeURIComponent(principalId)}`,
+    {
+      method: "DELETE",
+      headers,
+    },
+  );
+}
+
 test("case owner can grant access and shared principal gains workflow access", async () => {
   const now = Math.floor(Date.now() / 1000);
   const ownerToken = createTestJwt({ sub: "owner-1", roles: ["clinician"], iat: now, exp: now + 3600 });
@@ -159,5 +175,135 @@ test("shared principal can still read deleted-case audit history after access wa
       true,
     );
     assert.equal(auditRes.body.events.at(-1)?.eventType, "case.deleted");
+  }, { jwtSecret: JWT_SECRET });
+});
+
+test("case owner can revoke shared access and the revoked principal loses visibility", async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const ownerToken = createTestJwt({ sub: "owner-1", roles: ["clinician"], iat: now, exp: now + 3600 });
+  const sharedToken = createTestJwt({ sub: "shared-1", roles: ["clinician"], iat: now, exp: now + 3600 });
+
+  await withServer(async (baseUrl) => {
+    const ownerHeaders = { authorization: `Bearer ${ownerToken}` };
+    const sharedHeaders = { authorization: `Bearer ${sharedToken}` };
+    const caseId = await createJwtOwnedCase(baseUrl, ownerHeaders);
+
+    const shareRes = await grantCaseAccess(baseUrl, caseId, "shared-1", ownerHeaders);
+    assert.equal(shareRes.status, 200);
+
+    const revokeRes = await revokeCaseAccess(baseUrl, caseId, "shared-1", ownerHeaders);
+    assert.equal(revokeRes.status, 200);
+    assert.equal(revokeRes.body.case.accessControl?.allowedPrincipalIds.includes("shared-1"), false);
+
+    const listRes = await jsonRequest<{ cases: Array<{ caseId: string }> }>(baseUrl, "/api/cases", {
+      headers: sharedHeaders,
+    });
+    assert.equal(listRes.status, 200);
+    assert.equal(listRes.body.cases.some((entry) => entry.caseId === caseId), false);
+
+    const detailRes = await jsonRequest<{ code: string }>(baseUrl, `/api/cases/${caseId}`, {
+      headers: sharedHeaders,
+    });
+    assert.equal(detailRes.status, 404);
+  }, { jwtSecret: JWT_SECRET });
+});
+
+test("shared non-owner cannot revoke access and cannot perform destructive case actions", async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const ownerToken = createTestJwt({ sub: "owner-1", roles: ["clinician"], iat: now, exp: now + 3600 });
+  const sharedToken = createTestJwt({ sub: "shared-1", roles: ["clinician"], iat: now, exp: now + 3600 });
+
+  await withServer(async (baseUrl) => {
+    const ownerHeaders = { authorization: `Bearer ${ownerToken}` };
+    const sharedHeaders = { authorization: `Bearer ${sharedToken}` };
+    const caseId = await createJwtOwnedCase(baseUrl, ownerHeaders);
+
+    const artifactRes = await jsonRequest<{ case: { artifacts: Array<{ artifactId: string }> } }>(
+      baseUrl,
+      `/api/cases/${caseId}/artifacts`,
+      {
+        method: "POST",
+        body: { artifactType: "note", title: "Owner note", summary: "Seed artifact" },
+        headers: ownerHeaders,
+      },
+    );
+    assert.equal(artifactRes.status, 201);
+    const artifactId = artifactRes.body.case.artifacts[0]?.artifactId;
+    assert.ok(artifactId);
+
+    const shareRes = await grantCaseAccess(baseUrl, caseId, "shared-1", ownerHeaders);
+    assert.equal(shareRes.status, 200);
+
+    const revokeRes = await revokeCaseAccess(baseUrl, caseId, "owner-1", sharedHeaders);
+    assert.equal(revokeRes.status, 403);
+
+    const deleteArtifactRes = await jsonRequest<{ code: string }>(
+      baseUrl,
+      `/api/cases/${caseId}/artifacts/${artifactId}`,
+      {
+        method: "DELETE",
+        headers: sharedHeaders,
+      },
+    );
+    assert.equal(deleteArtifactRes.status, 403);
+
+    const deleteCaseRes = await fetch(`${baseUrl}/api/cases/${caseId}`, {
+      method: "DELETE",
+      headers: sharedHeaders,
+    });
+    assert.equal(deleteCaseRes.status, 403);
+  }, { jwtSecret: JWT_SECRET });
+});
+
+test("API key operator can revoke shared access", async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const ownerToken = createTestJwt({ sub: "owner-1", roles: ["clinician"], iat: now, exp: now + 3600 });
+  const sharedToken = createTestJwt({ sub: "shared-1", roles: ["clinician"], iat: now, exp: now + 3600 });
+
+  await withServer(async (baseUrl) => {
+    const ownerHeaders = { authorization: `Bearer ${ownerToken}` };
+    const sharedHeaders = { authorization: `Bearer ${sharedToken}` };
+    const apiKeyHeaders = { authorization: `Bearer ${API_KEY}` };
+    const caseId = await createJwtOwnedCase(baseUrl, ownerHeaders);
+
+    const shareRes = await grantCaseAccess(baseUrl, caseId, "shared-1", ownerHeaders);
+    assert.equal(shareRes.status, 200);
+
+    const revokeRes = await revokeCaseAccess(baseUrl, caseId, "shared-1", apiKeyHeaders);
+    assert.equal(revokeRes.status, 200);
+
+    const detailRes = await jsonRequest<{ code: string }>(baseUrl, `/api/cases/${caseId}`, {
+      headers: sharedHeaders,
+    });
+    assert.equal(detailRes.status, 404);
+  }, { jwtSecret: JWT_SECRET, apiKey: API_KEY });
+});
+
+test("revoked principal cannot read deleted-case audit history", async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const ownerToken = createTestJwt({ sub: "owner-1", roles: ["clinician"], iat: now, exp: now + 3600 });
+  const sharedToken = createTestJwt({ sub: "shared-1", roles: ["clinician"], iat: now, exp: now + 3600 });
+
+  await withServer(async (baseUrl) => {
+    const ownerHeaders = { authorization: `Bearer ${ownerToken}` };
+    const sharedHeaders = { authorization: `Bearer ${sharedToken}` };
+    const caseId = await createJwtOwnedCase(baseUrl, ownerHeaders);
+
+    const shareRes = await grantCaseAccess(baseUrl, caseId, "shared-1", ownerHeaders);
+    assert.equal(shareRes.status, 200);
+
+    const revokeRes = await revokeCaseAccess(baseUrl, caseId, "shared-1", ownerHeaders);
+    assert.equal(revokeRes.status, 200);
+
+    const deleteRes = await fetch(`${baseUrl}/api/cases/${caseId}`, {
+      method: "DELETE",
+      headers: ownerHeaders,
+    });
+    assert.equal(deleteRes.status, 204);
+
+    const auditRes = await jsonRequest<{ code: string }>(baseUrl, `/api/cases/${caseId}/audit-events`, {
+      headers: sharedHeaders,
+    });
+    assert.equal(auditRes.status, 404);
   }, { jwtSecret: JWT_SECRET });
 });

@@ -15,7 +15,11 @@ import {
   createQcSummaryRecord,
   createStudyContextRecord,
 } from "./specialty-context";
-import { createOwnerScopedAccessControl, grantCasePrincipalAccess } from "./access-control";
+import {
+  createOwnerScopedAccessControl,
+  grantCasePrincipalAccess,
+  revokeCasePrincipalAccess,
+} from "./access-control";
 
 function toIso(now: Date): string {
   return now.toISOString();
@@ -141,6 +145,44 @@ export function grantCaseAccess(
   }
 
   const nextAccessControl = grantCasePrincipalAccess(record.accessControl, principalId);
+  if (nextAccessControl === record.accessControl) {
+    return record;
+  }
+
+  return {
+    ...record,
+    accessControl: nextAccessControl,
+    updatedAt: toIso(now),
+  };
+}
+
+export function revokeCaseAccess(
+  record: AnamnesisCase,
+  principalId: string,
+  now = new Date(),
+): AnamnesisCase {
+  if (!record.accessControl) {
+    throw new AnamnesisDomainError(
+      "case_access_control_unavailable",
+      409,
+      "Case access cannot be revoked for this case.",
+    );
+  }
+
+  let nextAccessControl;
+  try {
+    nextAccessControl = revokeCasePrincipalAccess(record.accessControl, principalId);
+  } catch (error) {
+    if (error instanceof Error && error.message === "ownerPrincipalId cannot be revoked.") {
+      throw new AnamnesisDomainError(
+        "owner_access_required",
+        409,
+        "The case owner access cannot be revoked.",
+      );
+    }
+    throw error;
+  }
+
   if (nextAccessControl === record.accessControl) {
     return record;
   }

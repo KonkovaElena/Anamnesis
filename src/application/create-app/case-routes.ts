@@ -1,7 +1,9 @@
 import type { Express, Request, RequestHandler, Response } from "express";
+import type { AnamnesisCase } from "../../domain/anamnesis";
 import {
   addArtifact,
   attachStudyContext,
+  canPrincipalAdminCase,
   buildArtifactEvidenceLineage,
   canPrincipalAccessCase,
   createCase,
@@ -9,6 +11,7 @@ import {
   grantCaseAccess,
   recordQcSummary,
   registerSample,
+  revokeCaseAccess,
   removeArtifact,
 } from "../../domain/anamnesis";
 import { clampPagination } from "../../domain/anamnesis/store-contracts";
@@ -35,17 +38,8 @@ function respondForbidden(response: Response, message: string): void {
   });
 }
 
-function canManageCaseAccess(record: { accessControl?: { ownerPrincipalId: string } }, principal?: Request["principal"]): boolean {
-  if (!principal) {
-    return false;
-  }
-
-  if (principal.authMechanism === "api-key") {
-    return true;
-  }
-
-  return principal.authMechanism === "jwt-bearer"
-    && record.accessControl?.ownerPrincipalId === principal.actorId;
+function canManageCaseAccess(record: Pick<AnamnesisCase, "accessControl">, principal?: Request["principal"]): boolean {
+  return canPrincipalAdminCase(record, principal);
 }
 
 export function registerCaseRoutes(
@@ -131,6 +125,40 @@ export function registerCaseRoutes(
           occurredAt: nextCase.updatedAt,
           details: {
             sharedPrincipalId: input.principalId,
+          },
+        },
+      );
+    }
+
+    response.json({ case: nextCase });
+  });
+
+  app.delete("/api/cases/:caseId/access-grants/:principalId", async (request, response) => {
+    const record = await loadCaseOrRespondNotFound(store, request, response, readRouteParam(request.params.caseId));
+    if (!record) {
+      return;
+    }
+
+    if (!canManageCaseAccess(record, request.principal)) {
+      respondForbidden(response, "Only the case owner or API-key operator can revoke case access.");
+      return;
+    }
+
+    const principalId = readRouteParam(request.params.principalId);
+    const nextCase = revokeCaseAccess(record, principalId);
+    if (nextCase !== record) {
+      await store.saveCase(nextCase);
+      await appendAuditEvent(
+        auditStore,
+        request,
+        response,
+        {
+          caseId: nextCase.caseId,
+          eventType: "case.unshared",
+          action: "revoke_case_access",
+          occurredAt: nextCase.updatedAt,
+          details: {
+            revokedPrincipalId: principalId,
           },
         },
       );
@@ -285,6 +313,11 @@ export function registerCaseRoutes(
       return;
     }
 
+    if (!canPrincipalAdminCase(record, request.principal)) {
+      respondForbidden(response, "Only the case owner or API-key operator can remove artifacts.");
+      return;
+    }
+
     const artifactId = readRouteParam(request.params.artifactId);
     const removedArtifact = record.artifacts.find((artifact) => artifact.artifactId === artifactId);
     const nextCase = removeArtifact(record, artifactId);
@@ -311,6 +344,11 @@ export function registerCaseRoutes(
     const caseId = readRouteParam(request.params.caseId);
     const record = await loadCaseOrRespondNotFound(store, request, response, caseId);
     if (!record) {
+      return;
+    }
+
+    if (!canPrincipalAdminCase(record, request.principal)) {
+      respondForbidden(response, "Only the case owner or API-key operator can delete cases.");
       return;
     }
 
@@ -361,6 +399,16 @@ export function registerCaseRoutes(
             : undefined;
           if (sharedPrincipalId) {
             allowedPrincipalIds.add(sharedPrincipalId);
+          }
+          continue;
+        }
+
+        if (event.eventType === "case.unshared") {
+          const revokedPrincipalId = typeof event.details?.revokedPrincipalId === "string"
+            ? event.details.revokedPrincipalId
+            : undefined;
+          if (revokedPrincipalId) {
+            allowedPrincipalIds.delete(revokedPrincipalId);
           }
         }
       }

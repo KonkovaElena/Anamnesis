@@ -1,7 +1,7 @@
 import { type NextFunction, type Request, type Response } from "express";
 import { createAuthMiddleware } from "./application/auth-middleware";
 import { createApp } from "./application/create-app";
-import { assertJwtPublicKeyStrength } from "./core/jwt-verification";
+import { assertJwtJwksStrength, assertJwtPublicKeyStrength, type JwtJwkSet } from "./core/jwt-verification";
 import type { AuditTrailStore, ExternalAttachmentFetcher, AnamnesisStore } from "./domain/anamnesis";
 import { InMemoryAnamnesisStore } from "./infrastructure/InMemoryAnamnesisStore";
 import { InMemoryAuditTrailStore } from "./infrastructure/InMemoryAuditTrailStore";
@@ -15,6 +15,7 @@ export interface BootstrapOptions {
   apiKey?: string;
   jwtSecret?: string;
   jwtPublicKey?: string;
+  jwtJwks?: JwtJwkSet;
   jwtIssuer?: string;
   jwtAudience?: string;
   jwtTyp?: string;
@@ -38,14 +39,24 @@ function assertProductionJwtSecretStrength(jwtSecret: string | undefined, nodeEn
 }
 
 function assertJwtVerificationConfiguration(options: BootstrapOptions, nodeEnv: string | undefined): void {
-  if (options.jwtSecret && options.jwtPublicKey) {
-    throw new Error("JWT_SECRET and JWT_PUBLIC_KEY are mutually exclusive; configure exactly one JWT verification key source.");
+  const configuredSources = [
+    options.jwtSecret ? "JWT_SECRET" : undefined,
+    options.jwtPublicKey ? "JWT_PUBLIC_KEY" : undefined,
+    options.jwtJwks ? "JWT_JWKS" : undefined,
+  ].filter((entry): entry is string => entry !== undefined);
+
+  if (configuredSources.length > 1) {
+    throw new Error(`${configuredSources.join(", ")} are mutually exclusive; configure exactly one JWT verification key source.`);
   }
 
   assertProductionJwtSecretStrength(options.jwtSecret, nodeEnv);
 
   if (options.jwtPublicKey) {
     assertJwtPublicKeyStrength(options.jwtPublicKey);
+  }
+
+  if (options.jwtJwks) {
+    assertJwtJwksStrength(options.jwtJwks);
   }
 }
 
@@ -58,10 +69,10 @@ export function bootstrap(options?: BootstrapOptions) {
 
   assertJwtVerificationConfiguration(options ?? {}, normalizedNodeEnv);
 
-  if (!options?.apiKey && !options?.jwtSecret && !options?.jwtPublicKey) {
+  if (!options?.apiKey && !options?.jwtSecret && !options?.jwtPublicKey && !options?.jwtJwks) {
     if (!allowInsecureDevAuth) {
       throw new Error(
-        "API_KEY, JWT_SECRET, or JWT_PUBLIC_KEY is required unless ALLOW_INSECURE_DEV_AUTH=true is explicitly enabled for local development.",
+        "API_KEY, JWT_SECRET, JWT_PUBLIC_KEY, or JWT_JWKS is required unless ALLOW_INSECURE_DEV_AUTH=true is explicitly enabled for local development.",
       );
     }
 
@@ -95,7 +106,7 @@ export function bootstrap(options?: BootstrapOptions) {
   }
 
   let authMiddleware: ((req: Request, res: Response, next: NextFunction) => void) | undefined;
-  if (options?.apiKey || options?.jwtSecret || options?.jwtPublicKey) {
+  if (options?.apiKey || options?.jwtSecret || options?.jwtPublicKey || options?.jwtJwks) {
     authMiddleware = createAuthMiddleware({
       apiKey: options?.apiKey,
       jwt: options?.jwtSecret
@@ -112,6 +123,13 @@ export function bootstrap(options?: BootstrapOptions) {
               audience: options.jwtAudience,
               expectedTyp: options.jwtTyp,
             }
+          : options?.jwtJwks
+            ? {
+                jwks: options.jwtJwks,
+                issuer: options.jwtIssuer,
+                audience: options.jwtAudience,
+                expectedTyp: options.jwtTyp,
+              }
         : undefined,
       skipPaths: new Set(["/healthz", "/readyz", "/metrics"]),
     });

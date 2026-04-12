@@ -6,6 +6,7 @@ export {
 	grantCaseAccess,
 	recordQcSummary,
 	registerSample,
+	revokeCaseAccess,
 	removeArtifact,
 } from "./anamnesis/case-workflow";
 export { ingestDocument, ingestFhirBundle, ingestFhirResource } from "./anamnesis/document-imports";
@@ -18,10 +19,12 @@ export {
 	toAuditContext,
 } from "./anamnesis/audit-identity";
 export {
+	canPrincipalAdminCase,
 	canPrincipalAccessCase,
 	createOwnerScopedAccessControl,
 	filterCasesForPrincipal,
 	grantCasePrincipalAccess,
+	revokeCasePrincipalAccess,
 } from "./anamnesis/access-control";
 export { buildArtifactEvidenceLineage, stableClinicalReviewSignature } from "./anamnesis/evidence-lineage";
 export {
