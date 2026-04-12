@@ -1,8 +1,8 @@
 ---
 title: "Anamnesis Cryptographic Inventory And Agility Assessment"
 status: active
-version: "1.0.0"
-last_updated: "2026-04-08"
+version: "1.1.0"
+last_updated: "2026-04-12"
 tags: [anamnesis, security, cryptography, inventory]
 ---
 
@@ -22,7 +22,8 @@ This document is a planning and transparency surface, not a claim of cryptograph
 | Key parsing | Raw hex decode | 64-character hex string → 32-byte buffer | `src/infrastructure/encryption.ts` `parseEncryptionKey()` | Converts `ENCRYPTION_KEY` env var to key material |
 | ID generation | UUID v4 | `node:crypto` `randomUUID()` | `src/core/ids.ts` | Case, artifact, packet, review, and audit identifiers |
 | Request correlation | UUID v4 | `node:crypto` `randomUUID()` | `src/application/create-app.ts` | `x-request-id` header generation when not supplied |
-| Bearer authentication | String comparison | Constant-time not currently guaranteed | `src/application/auth-middleware.ts` | Compares `Authorization` header against `API_KEY` |
+| API-key bearer authentication | Constant-time byte comparison | `timingSafeEqual()` over UTF-8 token bytes | `src/application/auth-middleware.ts` | Compares `Authorization` header against `API_KEY` |
+| JWT bearer authentication | HS256 or RS256 | HS256 shared secret; RS256 RSA public key with modulus length >= 2048 bits | `src/core/jwt-verification.ts`, `src/bootstrap.ts` | Subject-bound JWT verification with issuer/audience/type enforcement |
 
 ## Token Format
 
@@ -54,17 +55,20 @@ AES-256 is generally considered quantum-resistant: Grover's algorithm halves the
 
 The Anamnesis slice does not use:
 
-- RSA or ECDSA (no asymmetric signing);
+- ECDSA, EdDSA, or post-quantum signature algorithms;
 - Diffie-Hellman key exchange;
 - TLS termination (handled by deployment infrastructure).
 
-Therefore the NIST 2035 deprecation horizon for vulnerable asymmetric primitives does not directly apply to the current runtime crypto surface. No immediate post-quantum migration is required.
+The standalone can now verify RS256 JWT signatures when `JWT_PUBLIC_KEY` is configured. This means classical RSA is part of the runtime trust model even though the repository does not mint JWTs or store RSA private signing keys itself.
+
+Therefore the NIST 2035 deprecation horizon for vulnerable asymmetric primitives is no longer completely irrelevant to the auth surface. Immediate migration is not required for the current narrow standalone scope, but any long-lived operator posture built around RS256 should preserve a migration path toward stronger asymmetric algorithms and rotating public-key distribution.
 
 Should the slice later adopt:
 
 - cryptographic audit-log signatures (e.g., Ed25519 or ECDSA chains);
 - TLS in-process;
 - asymmetric envelope encryption;
+- JWKS-backed JWT key rotation;
 
 then the migration plan must include NIST PQC alternatives: ML-KEM for key encapsulation, ML-DSA or SLH-DSA for signatures (FIPS 203, 204, 205).
 
@@ -104,13 +108,23 @@ If append-only audit events require tamper evidence beyond application-level con
 
 This is not planned for the current release but is documented here so the future implementation does not introduce a quantum-vulnerable primitive.
 
+### Phase E: Asymmetric JWT Key Rotation
+
+The current asymmetric auth posture uses a static `JWT_PUBLIC_KEY` verifier input. A stronger operator model should move toward issuer-bound key rollover:
+
+1. add `kid`-aware key selection instead of a single static verifier key;
+2. support HTTPS-retrieved JWK or JWKS documents with issuer binding and cache control;
+3. allow staged overlap windows so old and new signing keys can coexist during rollover;
+4. prefer algorithms with a clearer forward migration path once interoperability permits.
+
 ## Constant-Time Comparison Note
 
-The current bearer-auth middleware uses standard string comparison for `API_KEY` matching. While timing attacks against bearer tokens over HTTP are difficult to exploit in practice (network jitter dominates), a future hardening pass should migrate to `crypto.timingSafeEqual()` for defense in depth.
+The current API-key bearer path already uses `crypto.timingSafeEqual()` for constant-time comparison.
 
 ## Related Surfaces
 
 - [posture-and-gaps.md](posture-and-gaps.md)
+- [backup-restore-and-key-rotation.md](backup-restore-and-key-rotation.md)
 - [../claim-boundary.md](../claim-boundary.md)
 - [../../src/infrastructure/encryption.ts](../../src/infrastructure/encryption.ts)
 - [../../tests/encryption.test.ts](../../tests/encryption.test.ts)

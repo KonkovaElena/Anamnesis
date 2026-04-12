@@ -1,4 +1,5 @@
 import type { AuditEventRecord } from "../../core/audit-events";
+import type { ChainedAuditEventRecord } from "../../core/audit-events";
 import type { AnamnesisCase } from "./interfaces";
 
 export interface PaginationOptions {
@@ -24,7 +25,8 @@ export interface AnamnesisStore {
 
 export interface AuditTrailStore {
   append(event: AuditEventRecord): Promise<void>;
-  listByCase(caseId: string, options?: PaginationOptions): Promise<AuditEventRecord[]>;
-  listByCorrelationId(correlationId: string): Promise<AuditEventRecord[]>;
+  listByCase(caseId: string, options?: PaginationOptions): Promise<ChainedAuditEventRecord[]>;
+  listByCorrelationId(correlationId: string): Promise<ChainedAuditEventRecord[]>;
   countEvents(): Promise<number>;
+  getLastChainHash(): Promise<string>;
 }

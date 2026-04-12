@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import { normalizeCorrelationId } from "./correlation";
 import { IdGenerator } from "./ids";
@@ -92,4 +93,73 @@ export function createTypedAuditEvent(
     causationId: input.causationId,
     schemaVersion: AUDIT_EVENT_SCHEMA_VERSION,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Hash-chain integrity (R-01: Tamper-evident audit log)
+// ---------------------------------------------------------------------------
+
+export const GENESIS_CHAIN_HASH = "0".repeat(64);
+
+export function canonicalizeAuditEvent(event: AuditEventRecord): string {
+  const canonical = {
+    auditId: event.auditId,
+    eventId: event.eventId,
+    caseId: event.caseId,
+    packetId: event.packetId ?? null,
+    eventType: event.eventType,
+    action: event.action,
+    occurredAt: event.occurredAt,
+    recordedAt: event.recordedAt,
+    actorId: event.actorId ?? null,
+    outcome: event.outcome,
+    details: event.details ?? {},
+    correlationId: event.correlationId,
+    causationId: event.causationId ?? null,
+    schemaVersion: event.schemaVersion,
+  };
+  return JSON.stringify(canonical);
+}
+
+export function computeChainHash(event: AuditEventRecord, prevChainHash: string): string {
+  return createHash("sha256")
+    .update(prevChainHash)
+    .update(canonicalizeAuditEvent(event))
+    .digest("hex");
+}
+
+export interface ChainedAuditEventRecord extends AuditEventRecord {
+  chainHash: string;
+}
+
+export interface AuditChainVerificationResult {
+  valid: boolean;
+  verifiedCount: number;
+  brokenAtIndex?: number;
+  expectedHash?: string;
+  actualHash?: string;
+}
+
+export function verifyAuditChain(
+  events: ChainedAuditEventRecord[],
+): AuditChainVerificationResult {
+  let prevHash = GENESIS_CHAIN_HASH;
+
+  for (let i = 0; i < events.length; i++) {
+    const event = events[i]!;
+    const expectedHash = computeChainHash(event, prevHash);
+
+    if (event.chainHash !== expectedHash) {
+      return {
+        valid: false,
+        verifiedCount: i,
+        brokenAtIndex: i,
+        expectedHash,
+        actualHash: event.chainHash,
+      };
+    }
+    prevHash = event.chainHash;
+  }
+
+  return { valid: true, verifiedCount: events.length };
 }

@@ -1,8 +1,8 @@
 ---
 title: "Anamnesis Security Posture And Gaps"
 status: active
-version: "1.1.0"
-last_updated: "2026-04-09"
+version: "1.5.0"
+last_updated: "2026-04-12"
 tags: [anamnesis, security, evidence]
 ---
 
@@ -24,7 +24,7 @@ This page is implementation-grounded. It does not claim security controls that a
 
 | Threat surface | Current control | Current repo anchor | Residual note |
 | --- | --- | --- | --- |
-| Unauthenticated application access | Bearer token auth on application routes when `API_KEY` is set | `src/application/auth-middleware.ts`, `src/bootstrap.ts` | Single shared bearer secret, not per-user identity or RBAC |
+| Unauthenticated application access | Bearer token auth on application routes when `API_KEY`, `JWT_SECRET`, or `JWT_PUBLIC_KEY` is set | `src/application/auth-middleware.ts`, `src/bootstrap.ts`, `src/core/jwt-verification.ts` | API-key path remains shared-secret and operator-wide; JWT path can verify either HS256 shared-secret tokens or RS256 public-key tokens, is subject-bound, owner-scopes newly created cases, validates `sub`/`nbf`/configured `iss`/`aud`/optional `typ`, and applies packet-route role gates, but it is still not a full tenant/RBAC system |
 | Silent fail-open startup | Secure-by-default bootstrap policy; unauthenticated startup now requires explicit `ALLOW_INSECURE_DEV_AUTH=true` and is blocked in production mode | `src/bootstrap.ts`, `src/index.ts` | Local-dev override still exists by design |
 | Brute-force or burst abuse | Per-IP sliding-window limiter via `RATE_LIMIT_RPM` with IPv4-mapped IPv6 normalization | `src/application/rate-limiter.ts`, `src/application/create-app.ts` | Disabled by default unless configured |
 | Header hardening | Helmet with CSP/HSTS/COOP/CORP/Referrer-Policy and related headers | `src/application/create-app.ts` | TLS termination is still deployment-side, not in-process |
@@ -32,14 +32,21 @@ This page is implementation-grounded. It does not claim security controls that a
 | Data-at-rest disclosure | AES-256-GCM whole-record encryption for SQLite case store with versioned token format (`v1:` prefix) for future key rotation | `src/infrastructure/encryption.ts`, `src/infrastructure/SqliteAnamnesisStore.ts` | Audit store is durable but not encrypted by a second independent mechanism |
 | External attachment SSRF | `https` only, no URL credentials, local/metadata hostname denial, DNS resolution to public addresses only, redirect rejection, text-only MIME restriction, byte limit, optional hostname allowlist | `src/infrastructure/HttpExternalAttachmentFetcher.ts` | Stronger production posture still benefits from network egress controls |
 | Unauthorized claim widening via FHIR | Import seam remains constrained to narrow text-oriented resources and bundle types | `src/domain/anamnesis.ts`, `docs/claim-boundary.md` | Not a generic FHIR REST server |
-| Tampering or retroactive workflow confusion | Append-only audit events for write actions and packet review/finalization transitions | `src/domain/anamnesis.ts`, `src/infrastructure/*AuditTrailStore.ts` | No cryptographic signing or external notarization yet |
+| Tampering or retroactive workflow confusion | Append-only audit events for write actions and packet review/finalization transitions, plus SHA-256 hash-chain verification | `src/domain/anamnesis.ts`, `src/core/audit-events.ts`, `src/infrastructure/*AuditTrailStore.ts`, `src/application/create-app/ops-routes.ts` | No external notarization or detached signatures yet |
 
 ## Auth Posture
 
-- Application routes rely on a bearer token shared through `API_KEY`.
+- Application routes rely on a bearer token shared through `API_KEY` and/or a JWT validated through either `JWT_SECRET` (HS256) or `JWT_PUBLIC_KEY` (RS256).
+- `JWT_SECRET` and `JWT_PUBLIC_KEY` are mutually exclusive JWT verifier modes; bootstrap rejects ambiguous dual configuration.
+- JWT validation now rejects missing subject, malformed role arrays, future `nbf`, issuer/audience mismatches, and optional JOSE `typ` mismatches when `JWT_TYP` is configured.
 - Health, readiness, and metrics probes intentionally remain unauthenticated.
 - Local development can opt into unauthenticated startup only through `ALLOW_INSECURE_DEV_AUTH=true`.
 - `ALLOW_INSECURE_DEV_AUTH=true` is rejected when `NODE_ENV=production`.
+- In `NODE_ENV=production`, weak HS256 shared secrets are rejected at bootstrap; the current minimum is 32 bytes.
+- Weak RS256 verification keys are also rejected at bootstrap; the current minimum is an RSA public key with modulus length >= 2048 bits.
+- Under JWT bearer auth, newly created cases are owner-scoped to the authenticated subject, and non-owner JWT principals do not see or mutate those cases through case-bound routes.
+- Under JWT bearer auth, packet workflow identity fields (`requestedBy`, `reviewerName`, `finalizedBy`) are bound to the authenticated JWT `sub` instead of trusting caller-supplied strings.
+- Under JWT bearer auth, packet review requires `reviewer` or `clinician`, and packet finalization requires `clinician`.
 
 This is a secure-by-default improvement over the earlier silent no-key startup behavior.
 
@@ -75,18 +82,18 @@ Operator recommendation:
 
 What is not yet true:
 
-- tamper-evident audit signatures;
+- externalized or detached audit signatures;
 - external audit export or notarization;
-- documented key-rotation procedure;
-- documented backup-and-restore procedure.
+- automated encrypted-store key rotation;
+- automated backup scheduling or restore-drill orchestration.
 
 ## Known Gaps
 
 1. TLS is expected to be handled by deployment infrastructure rather than by the Node process itself.
-2. Auth is shared-secret based, not user- or role-based.
+2. The API-key path is still shared-secret based and operator-wide; the JWT path now supports HS256 and RS256 verification, owner-scoped case visibility, subject-bound identity, and route-level role enforcement, but it is not a full tenant/RBAC or delegated sharing system.
 3. There is no central secret manager integration or automated key rotation workflow in this repository. See [crypto-agility-inventory.md](crypto-agility-inventory.md) for the migration plan.
 4. The audit trail is append-only in software terms, but not cryptographically sealed.
-5. There is no formal backup, restore, or disaster-recovery runbook in the active docs set yet.
+5. The repository now has a current-state [backup, restore, and key-rotation runbook](backup-restore-and-key-rotation.md), but restore drills, backup scheduling, and encrypted-store key rotation remain manual operator work.
 6. Imaging study identifiers and molecular sample metadata are encrypted at rest with the case record, but they are not isolated behind a second compartment or field-level key boundary.
 7. The security posture is strong for the current narrow workflow surface, but it is not a claim of regulatory clearance or production security certification.
 
@@ -95,11 +102,13 @@ What is not yet true:
 Minimum recommended deployment posture for the current slice:
 
 1. Set `API_KEY` and keep `ALLOW_INSECURE_DEV_AUTH` unset.
+	If an external issuer already exists, prefer `JWT_PUBLIC_KEY` over `JWT_SECRET` so the standalone verifies signatures without sharing the issuer's signing secret.
 2. Run behind TLS termination.
 3. Set `RATE_LIMIT_RPM` to a non-zero value.
 4. Set `STORE_PATH` and `ENCRYPTION_KEY` together for durable encrypted storage.
 5. Use `EXTERNAL_ATTACHMENT_HOST_ALLOWLIST` if remote attachment fetch is enabled.
 6. Monitor `/readyz` and `/metrics` and treat them as operational surfaces, not business APIs.
+7. Follow [backup-restore-and-key-rotation.md](backup-restore-and-key-rotation.md) for current backup and recovery procedure instead of improvising file copies or key changes.
 
 ## Public Claim Boundary
 

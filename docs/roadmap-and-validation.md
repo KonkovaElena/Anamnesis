@@ -1,8 +1,8 @@
 ---
 title: "Anamnesis Roadmap And Validation"
 status: active
-version: "1.2.0"
-last_updated: "2026-04-06"
+version: "1.4.0"
+last_updated: "2026-04-12"
 tags: [anamnesis, healthcare, roadmap, validation]
 ---
 
@@ -49,11 +49,12 @@ These are repository-operations tasks, not product-scope upgrades.
 
 ## Immediate April 2026 Priorities
 
-1. Replace the single shared bearer-secret posture with a clearer operator model and a staged path toward stronger user or role scoping if the standalone remains server-side.
-2. Publish backup, restore, and key-rotation operating guidance before making stronger security or durability claims.
-3. Tighten the audit-integrity narrative: keep append-only workflow history as implemented truth, but treat sealing, notarization, and stronger confidentiality boundaries as explicit backlog.
+1. ~~Replace the single shared bearer-secret posture with a clearer operator model and a staged path toward stronger user or role scoping if the standalone remains server-side.~~ **Done (R-03)**: JWT Bearer auth now supports HS256 shared-secret verification or RS256 public-key verification, principal extraction, and role-based `RequestPrincipal`. API key auth is preserved for backward compatibility, while `JWT_SECRET` and `JWT_PUBLIC_KEY` remain mutually exclusive JWT modes.
+2. ~~Publish backup, restore, and key-rotation operating guidance before making stronger security or durability claims.~~ **Done (R-04)**: active runbook published at `docs/security/backup-restore-and-key-rotation.md`. Backup and restore now have explicit current-state operator guidance; automated encrypted-store key rotation remains backlog.
+3. ~~Tighten the audit-integrity narrative: keep append-only workflow history as implemented truth, but treat sealing, notarization, and stronger confidentiality boundaries as explicit backlog.~~ **Done (R-01)**: SHA-256 hash-chain on audit trail with genesis hash, chain verification, and tamper-detection API.
 4. Continue profile-oriented interoperability narrowing and conformance language discipline before any broader FHIR claim.
 5. Close the GitHub-side dependency-graph and repository-protection gap recorded in the post-push audit.
+6. **Phase 3 prep (R-02)**: `LlmSidecar` domain port and `NoOpLlmSidecar` stub adapter are contract-ready for retrieval-backed packet enrichment once an LLM adapter is integrated.
 
 ## Current Extraction Foundations
 

@@ -35,6 +35,7 @@ Read the current standalone authority in this order:
 - [claim-boundary.md](claim-boundary.md)
 - [roadmap-and-validation.md](roadmap-and-validation.md)
 - [security/posture-and-gaps.md](security/posture-and-gaps.md)
+- [security/backup-restore-and-key-rotation.md](security/backup-restore-and-key-rotation.md)
 
 ## Evidence And Research
 

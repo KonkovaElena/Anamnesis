@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { createServer } from "node:http";
+import { generateKeyPairSync } from "node:crypto";
 import { type AddressInfo } from "node:net";
 import test from "node:test";
 import { createApp } from "../src/application/create-app";
@@ -127,6 +128,70 @@ test("bootstrap rejects insecure dev auth when node environment is production", 
       }),
     /production/i,
   );
+});
+
+test("bootstrap rejects weak JWT secret in production", () => {
+  assert.throws(
+    () =>
+      bootstrap({
+        jwtSecret: "short-production-secret",
+        nodeEnv: "production",
+      }),
+    /JWT_SECRET/i,
+  );
+});
+
+test("bootstrap rejects mixed JWT secret and public key configuration", () => {
+  assert.throws(
+    () =>
+      bootstrap({
+        jwtSecret: "0123456789abcdef0123456789abcdef",
+        jwtPublicKey: "-----BEGIN PUBLIC KEY-----\ninvalid\n-----END PUBLIC KEY-----",
+      }),
+    /JWT_SECRET.*JWT_PUBLIC_KEY|JWT_PUBLIC_KEY.*JWT_SECRET/i,
+  );
+});
+
+test("bootstrap rejects weak JWT public key", () => {
+  const { publicKey } = generateKeyPairSync("rsa", {
+    modulusLength: 1024,
+    publicKeyEncoding: { type: "spki", format: "pem" },
+    privateKeyEncoding: { type: "pkcs8", format: "pem" },
+  });
+
+  assert.throws(
+    () =>
+      bootstrap({
+        jwtPublicKey: publicKey,
+      }),
+    /public key|RSA|2048/i,
+  );
+});
+
+test("bootstrap accepts strong JWT secret in production", () => {
+  const result = bootstrap({
+    jwtSecret: "0123456789abcdef0123456789abcdef",
+    nodeEnv: "production",
+  });
+
+  assert.ok(result.app);
+  result.closeStore?.();
+});
+
+test("bootstrap accepts strong JWT public key in production", () => {
+  const { publicKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: "spki", format: "pem" },
+    privateKeyEncoding: { type: "pkcs8", format: "pem" },
+  });
+
+  const result = bootstrap({
+    jwtPublicKey: publicKey,
+    nodeEnv: "production",
+  });
+
+  assert.ok(result.app);
+  result.closeStore?.();
 });
 
 test("request with non-Bearer auth scheme returns 401", async () => {

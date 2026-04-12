@@ -1,13 +1,14 @@
 import type { Express } from "express";
+import { verifyAuditChain } from "../../domain/anamnesis";
 import { loadOperationsSummary, renderMetrics, type RouteDependencies } from "./shared";
 
 export function registerOpsRoutes(
   app: Express,
   { store, auditStore, isShuttingDown }: RouteDependencies,
 ): void {
-  app.get("/api/operations/summary", async (_request, response) => {
+  app.get("/api/operations/summary", async (request, response) => {
     response.json({
-      summary: await loadOperationsSummary(store, auditStore),
+      summary: await loadOperationsSummary(store, auditStore, request.principal),
     });
   });
 
@@ -27,5 +28,20 @@ export function registerOpsRoutes(
   app.get("/metrics", async (_request, response) => {
     const summary = await loadOperationsSummary(store, auditStore);
     response.type("text/plain").send(renderMetrics(summary));
+  });
+
+  app.get("/api/audit-chain/verify", async (request, response) => {
+    const caseId = typeof request.query.caseId === "string" ? request.query.caseId.trim() : "";
+    if (!caseId) {
+      response.status(400).json({
+        code: "missing_case_id",
+        message: "Query parameter caseId is required.",
+      });
+      return;
+    }
+
+    const events = await auditStore.listByCase(caseId);
+    const result = verifyAuditChain(events);
+    response.json({ result });
   });
 }

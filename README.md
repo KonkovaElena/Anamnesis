@@ -12,6 +12,7 @@ Anamnesis is designed as a narrow standalone slice for healthcare-adjacent workf
 
 - structured case intake and case lifecycle APIs;
 - workflow-family-aware case creation for general intake, MRI second-opinion, and mRNA board-review paths;
+- owner-scoped visibility for JWT-created cases, with API-key operator access retained as the shared-secret admin path;
 - source artifact registration and removal with packet staleness tracking;
 - derived artifact metadata carry-through plus a read-only evidence-lineage graph route for lineage-aware evidence bundles;
 - molecular sample registration for case-scoped review workflows;
@@ -83,9 +84,9 @@ The current security baseline is intentionally modest but explicit:
 
 Current non-claims remain important:
 
-- no RBAC or user-scoped identity model;
+- no full tenant RBAC model, delegated case-sharing workflow, or fine-grained per-field access policy;
 - no cryptographically sealed audit log;
-- no documented key rotation or disaster-recovery runbook yet;
+- no automated encrypted-store key rotation, restore-drill orchestration, or disaster-recovery automation;
 - TLS is expected to be handled by deployment infrastructure, not by the Node process itself.
 
 ## Evidence And Documentation Model
@@ -102,6 +103,7 @@ Primary authority surfaces:
 - [docs/interop/README.md](docs/interop/README.md)
 - [docs/traceability-matrix.md](docs/traceability-matrix.md)
 - [docs/security/posture-and-gaps.md](docs/security/posture-and-gaps.md)
+- [docs/security/backup-restore-and-key-rotation.md](docs/security/backup-restore-and-key-rotation.md)
 - [docs/academic/evidence-register.md](docs/academic/evidence-register.md)
 - [openapi.yaml](openapi.yaml)
 
@@ -138,7 +140,7 @@ npm run validate:public-export
 npm run dev
 ```
 
-Set either `API_KEY` or `ALLOW_INSECURE_DEV_AUTH=true` before starting the server.
+Set one of `API_KEY`, `JWT_SECRET`, or `JWT_PUBLIC_KEY` before starting the server unless `ALLOW_INSECURE_DEV_AUTH=true` is explicitly enabled for local development.
 
 Default runtime port: `4020`
 
@@ -191,12 +193,19 @@ The image uses Node 24 Alpine, runs as a non-root user, and includes a built-in 
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `PORT` | No | `4020` | HTTP listen port |
-| `API_KEY` | Yes unless explicit local-dev override is enabled | — | Bearer token for API authentication on application endpoints |
-| `ALLOW_INSECURE_DEV_AUTH` | No | `false` | Explicit local-development override that allows startup without `API_KEY`; rejected when `NODE_ENV=production` |
+| `API_KEY` | One auth mechanism is required unless explicit local-dev override is enabled | — | Opaque bearer token for application endpoints |
+| `JWT_SECRET` | No | — | HS256 verifier secret for JWT bearer authentication; mutually exclusive with `JWT_PUBLIC_KEY` |
+| `JWT_PUBLIC_KEY` | No | — | PEM-encoded RSA public key for RS256 JWT verification; mutually exclusive with `JWT_SECRET` |
+| `JWT_ISSUER` | No | — | Optional JWT issuer constraint |
+| `JWT_AUDIENCE` | No | — | Optional JWT audience constraint |
+| `JWT_TYP` | No | — | Optional JOSE `typ` value that JWTs must match |
+| `ALLOW_INSECURE_DEV_AUTH` | No | `false` | Explicit local-development override that allows startup without `API_KEY`, `JWT_SECRET`, or `JWT_PUBLIC_KEY`; rejected when `NODE_ENV=production` |
 | `RATE_LIMIT_RPM` | No | `0` | Maximum requests per minute per IP; health and readiness probes are exempt |
 | `EXTERNAL_ATTACHMENT_HOST_ALLOWLIST` | No | — | Optional comma-separated hostname allowlist for external FHIR bundle attachment fetches |
 | `STORE_PATH` | No | — | Path to SQLite database file; when unset, data is stored in memory only |
 | `ENCRYPTION_KEY` | When `STORE_PATH` is set | — | 64-character hex string used for AES-256-GCM encryption at rest |
+
+Current operational guidance for backup, restore, and key handling lives in [docs/security/backup-restore-and-key-rotation.md](docs/security/backup-restore-and-key-rotation.md).
 
 ## API Surface
 

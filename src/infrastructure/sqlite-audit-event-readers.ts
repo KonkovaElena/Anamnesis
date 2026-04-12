@@ -1,5 +1,5 @@
 import Database from "better-sqlite3";
-import type { AuditEventRecord, PaginationOptions } from "../domain/anamnesis";
+import type { ChainedAuditEventRecord, PaginationOptions } from "../domain/anamnesis";
 import { clampPagination } from "../domain/anamnesis/store-contracts";
 import {
   AUDIT_EVENT_SELECT_FIELDS,
@@ -14,7 +14,7 @@ export function listSqliteAuditEventsByField(
   field: AuditEventLookupField,
   value: string,
   options?: PaginationOptions,
-): AuditEventRecord[] {
+): ChainedAuditEventRecord[] {
   const { limit, offset } = clampPagination(options);
   const rows = db
     .prepare(

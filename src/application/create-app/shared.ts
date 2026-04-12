@@ -1,4 +1,4 @@
-import type { Response } from "express";
+import type { Request, Response } from "express";
 import type {
   AnamnesisCase,
   AnamnesisStore,
@@ -8,7 +8,12 @@ import type {
   OperationsSummary,
   PhysicianPacket,
 } from "../../domain/anamnesis";
-import { buildOperationsSummary, createAuditEvent } from "../../domain/anamnesis";
+import {
+  buildOperationsSummary,
+  canPrincipalAccessCase,
+  createAuditEvent,
+  filterCasesForPrincipal,
+} from "../../domain/anamnesis";
 
 export interface RouteDependencies {
   store: AnamnesisStore;
@@ -37,11 +42,17 @@ export function respondPacketNotFound(response: Response): void {
 
 export async function loadCaseOrRespondNotFound(
   store: AnamnesisStore,
+  request: Request,
   response: Response,
   caseId: string,
 ): Promise<AnamnesisCase | undefined> {
   const record = await store.getCase(caseId);
   if (!record) {
+    respondCaseNotFound(response);
+    return undefined;
+  }
+
+  if (!canPrincipalAccessCase(record, request.principal)) {
     respondCaseNotFound(response);
     return undefined;
   }
@@ -77,9 +88,13 @@ export function isMalformedJsonError(
 export async function loadOperationsSummary(
   store: AnamnesisStore,
   auditStore: AuditTrailStore,
+  principal?: Request["principal"],
 ): Promise<OperationsSummary> {
-  const cases = await store.listCases();
-  const totalAuditEvents = await auditStore.countEvents();
+  const cases = filterCasesForPrincipal(await store.listCases(), principal);
+  const totalAuditEvents = principal?.authMechanism === "jwt-bearer"
+    ? (await Promise.all(cases.map(async (record) => (await auditStore.listByCase(record.caseId)).length)))
+      .reduce((sum, count) => sum + count, 0)
+    : await auditStore.countEvents();
   return buildOperationsSummary(cases, { totalAuditEvents });
 }
 
@@ -125,12 +140,14 @@ export function readResponseRequestId(response: Response): string | undefined {
 
 export async function appendAuditEvent(
   auditStore: AuditTrailStore,
+  request: Request,
   response: Response,
   input: CreateAuditEventInput,
 ): Promise<void> {
   await auditStore.append(
     createAuditEvent({
       ...input,
+      actorId: input.actorId ?? request.principal?.actorId,
       correlationId: readResponseRequestId(response),
     }),
   );

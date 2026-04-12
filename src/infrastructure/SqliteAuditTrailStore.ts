@@ -1,6 +1,6 @@
 import Database from "better-sqlite3";
-import { validateAuditEventRecord } from "../core/audit-events";
-import type { AuditEventRecord, AuditTrailStore, PaginationOptions } from "../domain/anamnesis";
+import { validateAuditEventRecord, computeChainHash, GENESIS_CHAIN_HASH } from "../core/audit-events";
+import type { AuditEventRecord, ChainedAuditEventRecord, AuditTrailStore, PaginationOptions } from "../domain/anamnesis";
 import {
   listSqliteAuditEventsByField,
 } from "./sqlite-audit-event-readers";
@@ -31,7 +31,8 @@ export class SqliteAuditTrailStore implements AuditTrailStore {
         outcome      TEXT NOT NULL,
         correlation_id TEXT,
         causation_id TEXT,
-        details_json TEXT NOT NULL
+        details_json TEXT NOT NULL,
+        chain_hash   TEXT
       );
       CREATE INDEX IF NOT EXISTS idx_audit_events_case_sequence
       ON audit_events(case_id, sequence);
@@ -43,6 +44,7 @@ export class SqliteAuditTrailStore implements AuditTrailStore {
     this.ensureColumn("schema_version", "INTEGER");
     this.ensureColumn("correlation_id", "TEXT");
     this.ensureColumn("causation_id", "TEXT");
+    this.ensureColumn("chain_hash", "TEXT");
   }
 
   private ensureColumn(name: string, definition: string): void {
@@ -57,6 +59,9 @@ export class SqliteAuditTrailStore implements AuditTrailStore {
 
   async append(event: AuditEventRecord): Promise<void> {
     const validatedEvent = validateAuditEventRecord(event);
+    const prevHash = await this.getLastChainHash();
+    const chainHash = computeChainHash(validatedEvent, prevHash);
+
     this.db
       .prepare(
         `INSERT INTO audit_events (
@@ -73,8 +78,9 @@ export class SqliteAuditTrailStore implements AuditTrailStore {
           outcome,
           correlation_id,
           causation_id,
-          details_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          details_json,
+          chain_hash
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         validatedEvent.auditId,
@@ -91,20 +97,28 @@ export class SqliteAuditTrailStore implements AuditTrailStore {
         validatedEvent.correlationId,
         validatedEvent.causationId ?? null,
         JSON.stringify(validatedEvent.details ?? {}),
+        chainHash,
       );
   }
 
-  async listByCase(caseId: string, options?: PaginationOptions): Promise<AuditEventRecord[]> {
+  async listByCase(caseId: string, options?: PaginationOptions): Promise<ChainedAuditEventRecord[]> {
     return listSqliteAuditEventsByField(this.db, "case_id", caseId, options);
   }
 
-  async listByCorrelationId(correlationId: string): Promise<AuditEventRecord[]> {
+  async listByCorrelationId(correlationId: string): Promise<ChainedAuditEventRecord[]> {
     return listSqliteAuditEventsByField(this.db, "correlation_id", correlationId);
   }
 
   async countEvents(): Promise<number> {
     const row = this.db.prepare("SELECT COUNT(*) AS count FROM audit_events").get() as { count: number };
     return row.count;
+  }
+
+  async getLastChainHash(): Promise<string> {
+    const row = this.db
+      .prepare("SELECT chain_hash FROM audit_events ORDER BY sequence DESC LIMIT 1")
+      .get() as { chain_hash: string | null } | undefined;
+    return row?.chain_hash ?? GENESIS_CHAIN_HASH;
   }
 
   close(): void {

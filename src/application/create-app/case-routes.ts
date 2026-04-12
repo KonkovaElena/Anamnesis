@@ -3,7 +3,9 @@ import {
   addArtifact,
   attachStudyContext,
   buildArtifactEvidenceLineage,
+  canPrincipalAccessCase,
   createCase,
+  filterCasesForPrincipal,
   recordQcSummary,
   registerSample,
   removeArtifact,
@@ -20,6 +22,7 @@ import {
   appendAuditEvent,
   loadCaseOrRespondNotFound,
   readRouteParam,
+  respondCaseNotFound,
   type RouteDependencies,
 } from "./shared";
 
@@ -30,10 +33,14 @@ export function registerCaseRoutes(
 ): void {
   app.post("/api/cases", parseJson, async (request, response) => {
     const input = createCaseSchema.parse(request.body ?? {});
-    const record = createCase(input);
+    const ownerPrincipalId = request.principal?.authMechanism === "jwt-bearer"
+      ? request.principal.actorId
+      : undefined;
+    const record = createCase(input, new Date(), { ownerPrincipalId });
     await store.saveCase(record);
     await appendAuditEvent(
       auditStore,
+      request,
       response,
       {
         caseId: record.caseId,
@@ -53,7 +60,10 @@ export function registerCaseRoutes(
       limit: request.query.limit ? Number(request.query.limit) : undefined,
       offset: request.query.offset ? Number(request.query.offset) : undefined,
     });
-    const cases = await store.listCases(pagination);
+    const allCases = request.principal?.authMechanism === "jwt-bearer"
+      ? filterCasesForPrincipal(await store.listCases(), request.principal)
+      : await store.listCases();
+    const cases = allCases.slice(pagination.offset, pagination.offset + pagination.limit);
     response.json({
       cases,
       meta: {
@@ -65,7 +75,7 @@ export function registerCaseRoutes(
   });
 
   app.get("/api/cases/:caseId", async (request, response) => {
-    const record = await loadCaseOrRespondNotFound(store, response, readRouteParam(request.params.caseId));
+    const record = await loadCaseOrRespondNotFound(store, request, response, readRouteParam(request.params.caseId));
     if (!record) {
       return;
     }
@@ -74,7 +84,7 @@ export function registerCaseRoutes(
   });
 
   app.get("/api/cases/:caseId/evidence-lineage", async (request, response) => {
-    const record = await loadCaseOrRespondNotFound(store, response, readRouteParam(request.params.caseId));
+    const record = await loadCaseOrRespondNotFound(store, request, response, readRouteParam(request.params.caseId));
     if (!record) {
       return;
     }
@@ -100,7 +110,7 @@ export function registerCaseRoutes(
   });
 
   app.post("/api/cases/:caseId/samples", parseJson, async (request, response) => {
-    const record = await loadCaseOrRespondNotFound(store, response, readRouteParam(request.params.caseId));
+    const record = await loadCaseOrRespondNotFound(store, request, response, readRouteParam(request.params.caseId));
     if (!record) {
       return;
     }
@@ -111,6 +121,7 @@ export function registerCaseRoutes(
     await store.saveCase(nextCase);
     await appendAuditEvent(
       auditStore,
+      request,
       response,
       {
         caseId: nextCase.caseId,
@@ -128,7 +139,7 @@ export function registerCaseRoutes(
   });
 
   app.post("/api/cases/:caseId/study-context", parseJson, async (request, response) => {
-    const record = await loadCaseOrRespondNotFound(store, response, readRouteParam(request.params.caseId));
+    const record = await loadCaseOrRespondNotFound(store, request, response, readRouteParam(request.params.caseId));
     if (!record) {
       return;
     }
@@ -138,6 +149,7 @@ export function registerCaseRoutes(
     await store.saveCase(nextCase);
     await appendAuditEvent(
       auditStore,
+      request,
       response,
       {
         caseId: nextCase.caseId,
@@ -155,7 +167,7 @@ export function registerCaseRoutes(
   });
 
   app.post("/api/cases/:caseId/qc-summary", parseJson, async (request, response) => {
-    const record = await loadCaseOrRespondNotFound(store, response, readRouteParam(request.params.caseId));
+    const record = await loadCaseOrRespondNotFound(store, request, response, readRouteParam(request.params.caseId));
     if (!record) {
       return;
     }
@@ -165,6 +177,7 @@ export function registerCaseRoutes(
     await store.saveCase(nextCase);
     await appendAuditEvent(
       auditStore,
+      request,
       response,
       {
         caseId: nextCase.caseId,
@@ -183,7 +196,7 @@ export function registerCaseRoutes(
   });
 
   app.post("/api/cases/:caseId/artifacts", parseJson, async (request, response) => {
-    const record = await loadCaseOrRespondNotFound(store, response, readRouteParam(request.params.caseId));
+    const record = await loadCaseOrRespondNotFound(store, request, response, readRouteParam(request.params.caseId));
     if (!record) {
       return;
     }
@@ -194,6 +207,7 @@ export function registerCaseRoutes(
     const artifact = nextCase.artifacts.at(-1);
     await appendAuditEvent(
       auditStore,
+      request,
       response,
       {
         caseId: nextCase.caseId,
@@ -210,7 +224,7 @@ export function registerCaseRoutes(
   });
 
   app.delete("/api/cases/:caseId/artifacts/:artifactId", async (request, response) => {
-    const record = await loadCaseOrRespondNotFound(store, response, readRouteParam(request.params.caseId));
+    const record = await loadCaseOrRespondNotFound(store, request, response, readRouteParam(request.params.caseId));
     if (!record) {
       return;
     }
@@ -221,6 +235,7 @@ export function registerCaseRoutes(
     await store.saveCase(nextCase);
     await appendAuditEvent(
       auditStore,
+      request,
       response,
       {
         caseId: nextCase.caseId,
@@ -238,7 +253,7 @@ export function registerCaseRoutes(
 
   app.delete("/api/cases/:caseId", async (request, response) => {
     const caseId = readRouteParam(request.params.caseId);
-    const record = await loadCaseOrRespondNotFound(store, response, caseId);
+    const record = await loadCaseOrRespondNotFound(store, request, response, caseId);
     if (!record) {
       return;
     }
@@ -246,6 +261,7 @@ export function registerCaseRoutes(
     await store.deleteCase(caseId);
     await appendAuditEvent(
       auditStore,
+      request,
       response,
       {
         caseId,
@@ -268,7 +284,25 @@ export function registerCaseRoutes(
       limit: request.query.limit ? Number(request.query.limit) : undefined,
       offset: request.query.offset ? Number(request.query.offset) : undefined,
     });
+    const record = await store.getCase(caseId);
+    if (record && !canPrincipalAccessCase(record, request.principal)) {
+      respondCaseNotFound(response);
+      return;
+    }
+
     const events = await auditStore.listByCase(caseId, pagination);
+    if (!record && request.principal?.authMechanism === "jwt-bearer") {
+      const creatorActorId = events.find((event) => event.eventType === "case.created")?.actorId;
+      if (
+        creatorActorId
+        && creatorActorId !== "api-key-holder"
+        && creatorActorId !== request.principal.actorId
+      ) {
+        respondCaseNotFound(response);
+        return;
+      }
+    }
+
     response.json({
       events,
       meta: {

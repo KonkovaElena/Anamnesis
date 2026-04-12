@@ -304,9 +304,15 @@ export interface SubmitReviewInput {
   comments?: string;
 }
 
+export interface CaseAccessControl {
+  ownerPrincipalId: string;
+  allowedPrincipalIds: string[];
+}
+
 export interface AnamnesisCase {
   caseId: string;
   patientLabel?: string;
+  accessControl?: CaseAccessControl;
   workflowFamily: WorkflowFamily;
   status: CaseStatus;
   createdAt: string;
@@ -328,4 +334,30 @@ export interface OperationsSummary {
   totalAuditEvents: number;
   statusCounts: Record<CaseStatus, number>;
   lastUpdatedAt: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// LLM Sidecar Port (Phase 3: Retrieval-backed packet enrichment)
+// ---------------------------------------------------------------------------
+
+export interface LlmDraftAssistanceInput {
+  caseId: string;
+  artifacts: ReadonlyArray<Pick<SourceArtifact, "artifactId" | "artifactType" | "title" | "summary">>;
+  intake: CaseIntake;
+  focus?: string;
+  maxTokens?: number;
+}
+
+export interface LlmDraftAssistanceResult {
+  sections: PhysicianPacketSection[];
+  model: string;
+  promptTokens: number;
+  completionTokens: number;
+  durationMs: number;
+  disclaimer: string;
+}
+
+export interface LlmSidecar {
+  isAvailable(): Promise<boolean>;
+  assistDraft(input: LlmDraftAssistanceInput): Promise<LlmDraftAssistanceResult>;
 }

@@ -1,8 +1,8 @@
 ---
 title: "Anamnesis API Scope"
 status: active
-version: "1.3.0"
-last_updated: "2026-04-08"
+version: "1.6.0"
+last_updated: "2026-04-12"
 tags: [anamnesis, api, reference]
 ---
 
@@ -19,9 +19,27 @@ This is an organizational workflow API, not a diagnostic or treatment API.
 ## Authentication Model
 
 - Application endpoints use `Authorization: Bearer <API_KEY>` when `API_KEY` is configured.
-- Startup without `API_KEY` is rejected unless `ALLOW_INSECURE_DEV_AUTH=true` is explicitly set.
+- Application endpoints also accept `Authorization: Bearer <JWT>` when `JWT_SECRET` or `JWT_PUBLIC_KEY` is configured.
+- `JWT_SECRET` and `JWT_PUBLIC_KEY` are mutually exclusive JWT verifier modes.
+- When `API_KEY` and one JWT verifier mode are configured, either bearer mechanism may be used.
+- JWT bearer validation requires a non-empty `sub`, enforces configured `JWT_ISSUER` and `JWT_AUDIENCE` when present, rejects malformed `roles`, and honors `nbf` in addition to `iat`/`exp`.
+- When `JWT_TYP` is configured, JWTs must also carry a matching JOSE `typ` value.
+- Startup without `API_KEY`, `JWT_SECRET`, or `JWT_PUBLIC_KEY` is rejected unless `ALLOW_INSECURE_DEV_AUTH=true` is explicitly set.
 - `ALLOW_INSECURE_DEV_AUTH=true` is rejected when `NODE_ENV=production`.
 - `GET /healthz`, `GET /readyz`, and `GET /metrics` remain unauthenticated even when bearer auth is enabled.
+- Under JWT bearer auth, the packet workflow treats the authenticated JWT `sub` as the trusted workflow actor for `requestedBy`, `reviewerName`, and `finalizedBy` rather than trusting arbitrary body strings.
+- Under JWT bearer auth, packet review requires the `reviewer` or `clinician` role, and packet finalization requires the `clinician` role.
+- Under JWT bearer auth, newly created cases are owner-scoped to the authenticated subject; non-owner JWT principals do not see those cases in listing results and receive `404` on direct case-bound reads and writes.
+- API-key bearer auth remains the shared-secret operator path and retains access to JWT-owned cases.
+
+## Auth Configuration Surface
+
+- `JWT_SECRET` enables HS256 bearer-token verification.
+- `JWT_PUBLIC_KEY` enables RS256 bearer-token verification with a PEM-encoded RSA public key.
+- `JWT_ISSUER` and `JWT_AUDIENCE` narrow acceptance to the intended issuer and recipient.
+- `JWT_TYP` is optional and, when configured, requires a matching JOSE `typ` value such as `anamnesis+jwt`.
+- In `NODE_ENV=production`, weak JWT shared secrets are rejected at bootstrap; the current code requires at least 32 bytes of secret material.
+- Weak RS256 verification keys are also rejected at bootstrap; the current code requires an RSA public key with modulus length >= 2048 bits.
 
 ## Rate Limiting
 
@@ -42,7 +60,7 @@ This is an organizational workflow API, not a diagnostic or treatment API.
 | Route | Method | Behavior |
 | --- | --- | --- |
 | `/api/cases` | `POST` | Create a new case with structured intake. |
-| `/api/cases` | `GET` | List cases with `meta.totalCases`. |
+| `/api/cases` | `GET` | List cases with `meta.returnedCount`, `limit`, and `offset`. Under JWT bearer auth, only JWT-accessible cases are returned. |
 | `/api/cases/{caseId}` | `GET` | Return one case by id. |
 | `/api/cases/{caseId}` | `DELETE` | Delete a case and append `case.deleted` to the audit trail. |
 | `/api/cases/{caseId}/artifacts` | `POST` | Register a source artifact and stale any active packet drafts. |
@@ -54,13 +72,14 @@ This is an organizational workflow API, not a diagnostic or treatment API.
 | `/api/cases/{caseId}/document-ingestions` | `POST` | Normalize bounded text into a source artifact plus ingestion metadata. |
 | `/api/cases/{caseId}/fhir-imports` | `POST` | Import one supported inline FHIR resource into a source artifact. |
 | `/api/cases/{caseId}/fhir-bundle-imports` | `POST` | Import one supported FHIR bundle into one or more source artifacts. `document` bundles must include the standard document envelope for this slice. |
-| `/api/cases/{caseId}/physician-packets` | `POST` | Draft a physician packet from the current case state. |
+| `/api/cases/{caseId}/physician-packets` | `POST` | Draft a physician packet from the current case state. Under JWT, `requestedBy` is bound to the authenticated `sub`. |
 | `/api/cases/{caseId}/physician-packets` | `GET` | List packet drafts for a case with `meta.totalPackets`. |
-| `/api/cases/{caseId}/physician-packets/{packetId}/reviews` | `POST` | Append a clinician review entry. |
+| `/api/cases/{caseId}/physician-packets/{packetId}/reviews` | `POST` | Append a clinician review entry. Under JWT, `reviewerName` is bound to the authenticated `sub`, and the principal must hold `reviewer` or `clinician`. |
 | `/api/cases/{caseId}/physician-packets/{packetId}/reviews` | `GET` | Return the review ledger for one packet. |
-| `/api/cases/{caseId}/physician-packets/{packetId}/finalize` | `POST` | Finalize a clinician-approved, non-stale packet. |
+| `/api/cases/{caseId}/physician-packets/{packetId}/finalize` | `POST` | Finalize a clinician-approved, non-stale packet. Under JWT, `finalizedBy` is bound to the authenticated `sub`, and the principal must hold `clinician`. |
 | `/api/cases/{caseId}/audit-events` | `GET` | Return append-only audit events by `caseId`. |
-| `/api/operations/summary` | `GET` | Return aggregate workflow counts for cases, artifacts, packets, reviews, finalized packets, and audit events. |
+| `/api/audit-chain/verify` | `GET` | Recompute and verify the SHA-256 audit hash chain for one case via `caseId` query parameter. |
+| `/api/operations/summary` | `GET` | Return aggregate workflow counts for cases, artifacts, packets, reviews, finalized packets, and audit events. Under JWT bearer auth, counts are scoped to JWT-accessible cases and their audit history. |
 | `/healthz` | `GET` | Liveness probe. |
 | `/readyz` | `GET` | Readiness probe; returns `503` during shutdown drain. |
 | `/metrics` | `GET` | Prometheus-style plain-text counters. |
@@ -81,8 +100,10 @@ Document and FHIR import responses now expose explicit profile metadata so clien
 - `auditId` remains the legacy public identifier for compatibility.
 - `eventId` is the extracted event-kernel identifier and currently mirrors `auditId` exactly.
 - `schemaVersion` is currently fixed at `1`.
+- `chainHash` is a SHA-256 hash-chain value derived from the previous event hash plus the canonicalized current event.
 - `correlationId` records the originating HTTP request correlation and mirrors the `x-request-id` header assigned when the event was created through the API.
 - `causationId` is optional and reserved for future chained event flows.
+- `actorId` is populated from the authenticated bearer principal when the route does not already provide a domain-specific actor; JWT-backed packet draft/review/finalize routes also bind their actor-bearing fields to the authenticated subject instead of trusting the request body.
 - ingestion-related audit events include normalization and import profile metadata inside `details`.
 - extraction-related audit events cover sample registration, study-context attachment, and QC-summary recording.
 - evidence-lineage reads are intentionally read-only and do not emit audit events in the current slice.

@@ -14,7 +14,7 @@ export function registerIngestionRoutes(
   parseJson: RequestHandler,
 ): void {
   app.post("/api/cases/:caseId/document-ingestions", parseJson, async (request, response) => {
-    const record = await loadCaseOrRespondNotFound(store, response, readRouteParam(request.params.caseId));
+    const record = await loadCaseOrRespondNotFound(store, request, response, readRouteParam(request.params.caseId));
     if (!record) {
       return;
     }
@@ -24,6 +24,7 @@ export function registerIngestionRoutes(
     await store.saveCase(result.nextCase);
     await appendAuditEvent(
       auditStore,
+      request,
       response,
       {
         caseId: result.nextCase.caseId,
@@ -48,7 +49,7 @@ export function registerIngestionRoutes(
   });
 
   app.post("/api/cases/:caseId/fhir-imports", parseJson, async (request, response) => {
-    const record = await loadCaseOrRespondNotFound(store, response, readRouteParam(request.params.caseId));
+    const record = await loadCaseOrRespondNotFound(store, request, response, readRouteParam(request.params.caseId));
     if (!record) {
       return;
     }
@@ -58,6 +59,7 @@ export function registerIngestionRoutes(
     await store.saveCase(result.nextCase);
     await appendAuditEvent(
       auditStore,
+      request,
       response,
       {
         caseId: result.nextCase.caseId,
@@ -84,7 +86,7 @@ export function registerIngestionRoutes(
   });
 
   app.post("/api/cases/:caseId/fhir-bundle-imports", parseJson, async (request, response) => {
-    const record = await loadCaseOrRespondNotFound(store, response, readRouteParam(request.params.caseId));
+    const record = await loadCaseOrRespondNotFound(store, request, response, readRouteParam(request.params.caseId));
     if (!record) {
       return;
     }
@@ -96,6 +98,7 @@ export function registerIngestionRoutes(
     await store.saveCase(result.nextCase);
     await appendAuditEvent(
       auditStore,
+      request,
       response,
       {
         caseId: result.nextCase.caseId,

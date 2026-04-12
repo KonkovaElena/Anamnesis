@@ -1,4 +1,4 @@
-import type { Express, RequestHandler } from "express";
+import type { Express, Request, RequestHandler, Response } from "express";
 import { draftPhysicianPacket, finalizePhysicianPacket, submitReview } from "../../domain/anamnesis";
 import { createPacketSchema, finalizePacketSchema, submitReviewSchema } from "./schemas";
 import {
@@ -9,22 +9,88 @@ import {
   type RouteDependencies,
 } from "./shared";
 
+function respondForbidden(response: Response, message: string): void {
+  response.status(403).json({
+    code: "forbidden",
+    message,
+  });
+}
+
+function resolveGovernedActor(
+  request: Request,
+  response: Response,
+  options: {
+    fieldName: "requestedBy" | "reviewerName" | "finalizedBy";
+    submittedActor?: string;
+    requiredForNonJwt?: boolean;
+    requiredJwtRoles?: string[];
+  },
+): string | undefined | null {
+  const principal = request.principal;
+
+  if (principal?.authMechanism === "jwt-bearer") {
+    if (
+      options.requiredJwtRoles
+      && !options.requiredJwtRoles.some((role) => principal.roles.includes(role))
+    ) {
+      respondForbidden(
+        response,
+        `JWT principal lacks required role for ${options.fieldName}.`,
+      );
+      return null;
+    }
+
+    if (options.submittedActor && options.submittedActor !== principal.actorId) {
+      response.status(400).json({
+        code: "invalid_input",
+        message: `${options.fieldName} must match the authenticated JWT subject.`,
+      });
+      return null;
+    }
+
+    return principal.actorId;
+  }
+
+  if (options.requiredForNonJwt && !options.submittedActor) {
+    response.status(400).json({
+      code: "invalid_input",
+      message: `${options.fieldName} is required.`,
+    });
+    return null;
+  }
+
+  return options.submittedActor;
+}
+
 export function registerPacketRoutes(
   app: Express,
   { store, auditStore }: RouteDependencies,
   parseJson: RequestHandler,
 ): void {
   app.post("/api/cases/:caseId/physician-packets", parseJson, async (request, response) => {
-    const record = await loadCaseOrRespondNotFound(store, response, readRouteParam(request.params.caseId));
+    const record = await loadCaseOrRespondNotFound(store, request, response, readRouteParam(request.params.caseId));
     if (!record) {
       return;
     }
 
     const input = createPacketSchema.parse(request.body ?? {});
-    const result = draftPhysicianPacket(record, input);
+    const requestedBy = resolveGovernedActor(request, response, {
+      fieldName: "requestedBy",
+      submittedActor: input.requestedBy,
+      requiredForNonJwt: false,
+    });
+    if (requestedBy === null) {
+      return;
+    }
+
+    const result = draftPhysicianPacket(record, {
+      ...input,
+      requestedBy,
+    });
     await store.saveCase(result.nextCase);
     await appendAuditEvent(
       auditStore,
+      request,
       response,
       {
         caseId: result.nextCase.caseId,
@@ -46,7 +112,7 @@ export function registerPacketRoutes(
   });
 
   app.get("/api/cases/:caseId/physician-packets", async (request, response) => {
-    const record = await loadCaseOrRespondNotFound(store, response, readRouteParam(request.params.caseId));
+    const record = await loadCaseOrRespondNotFound(store, request, response, readRouteParam(request.params.caseId));
     if (!record) {
       return;
     }
@@ -60,17 +126,38 @@ export function registerPacketRoutes(
   });
 
   app.post("/api/cases/:caseId/physician-packets/:packetId/reviews", parseJson, async (request, response) => {
-    const record = await loadCaseOrRespondNotFound(store, response, readRouteParam(request.params.caseId));
+    const record = await loadCaseOrRespondNotFound(store, request, response, readRouteParam(request.params.caseId));
     if (!record) {
       return;
     }
 
     const packetId = readRouteParam(request.params.packetId);
     const input = submitReviewSchema.parse(request.body ?? {});
-    const result = submitReview(record, packetId, input);
+    const reviewerName = resolveGovernedActor(request, response, {
+      fieldName: "reviewerName",
+      submittedActor: input.reviewerName,
+      requiredForNonJwt: true,
+      requiredJwtRoles: ["reviewer", "clinician"],
+    });
+    if (reviewerName === null) {
+      return;
+    }
+    if (reviewerName === undefined) {
+      response.status(400).json({
+        code: "invalid_input",
+        message: "reviewerName is required.",
+      });
+      return;
+    }
+
+    const result = submitReview(record, packetId, {
+      ...input,
+      reviewerName,
+    });
     await store.saveCase(result.nextCase);
     await appendAuditEvent(
       auditStore,
+      request,
       response,
       {
         caseId: result.nextCase.caseId,
@@ -91,17 +178,38 @@ export function registerPacketRoutes(
   });
 
   app.post("/api/cases/:caseId/physician-packets/:packetId/finalize", parseJson, async (request, response) => {
-    const record = await loadCaseOrRespondNotFound(store, response, readRouteParam(request.params.caseId));
+    const record = await loadCaseOrRespondNotFound(store, request, response, readRouteParam(request.params.caseId));
     if (!record) {
       return;
     }
 
     const packetId = readRouteParam(request.params.packetId);
     const input = finalizePacketSchema.parse(request.body ?? {});
-    const result = finalizePhysicianPacket(record, packetId, input);
+    const finalizedBy = resolveGovernedActor(request, response, {
+      fieldName: "finalizedBy",
+      submittedActor: input.finalizedBy,
+      requiredForNonJwt: true,
+      requiredJwtRoles: ["clinician"],
+    });
+    if (finalizedBy === null) {
+      return;
+    }
+    if (finalizedBy === undefined) {
+      response.status(400).json({
+        code: "invalid_input",
+        message: "finalizedBy is required.",
+      });
+      return;
+    }
+
+    const result = finalizePhysicianPacket(record, packetId, {
+      ...input,
+      finalizedBy,
+    });
     await store.saveCase(result.nextCase);
     await appendAuditEvent(
       auditStore,
+      request,
       response,
       {
         caseId: result.nextCase.caseId,
@@ -123,7 +231,7 @@ export function registerPacketRoutes(
   });
 
   app.get("/api/cases/:caseId/physician-packets/:packetId/reviews", async (request, response) => {
-    const record = await loadCaseOrRespondNotFound(store, response, readRouteParam(request.params.caseId));
+    const record = await loadCaseOrRespondNotFound(store, request, response, readRouteParam(request.params.caseId));
     if (!record) {
       return;
     }

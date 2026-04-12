@@ -23,4 +23,4 @@ export type SampleType = "TUMOR_DNA" | "NORMAL_DNA" | "TUMOR_RNA" | "FOLLOW_UP";
 export type AssayType = "WES" | "WGS" | "RNA_SEQ" | "PANEL" | "OTHER";
 export type QcCheckStatus = "pass" | "warn" | "reject";
 
-export type { AuditEventOutcome, AuditEventRecord, AuditEventType, CreateAuditEventInput } from "../../core/audit-events";
+export type { AuditEventOutcome, AuditEventRecord, AuditEventType, ChainedAuditEventRecord, CreateAuditEventInput } from "../../core/audit-events";

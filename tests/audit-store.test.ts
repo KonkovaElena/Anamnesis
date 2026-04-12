@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { verifyAuditChain, type ChainedAuditEventRecord } from "../src/core/audit-events";
 
 interface AuditEventView {
   auditId: string;
@@ -20,6 +21,7 @@ interface AuditEventView {
   causationId?: string;
   schemaVersion: number;
   details?: Record<string, unknown>;
+  chainHash?: string;
 }
 
 interface AuditTrailStoreView {
@@ -27,6 +29,7 @@ interface AuditTrailStoreView {
   listByCase(caseId: string): Promise<AuditEventView[]>;
   listByCorrelationId(correlationId: string): Promise<AuditEventView[]>;
   countEvents(): Promise<number>;
+  getLastChainHash(): Promise<string>;
   close(): void;
 }
 
@@ -128,6 +131,54 @@ test("SqliteAuditTrailStore lists audit events by correlation id across cases", 
     assert.ok(events.every((event) => event.auditId === event.eventId));
   } finally {
     store?.close();
+    rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+  }
+});
+
+test("SqliteAuditTrailStore persists hash-chain values and verifies them across reopen", async () => {
+  const SqliteAuditTrailStore = await loadSqliteAuditTrailStore();
+  const dir = makeTempDir();
+  const dbPath = join(dir, "audit.db");
+  let store1: AuditTrailStoreView | undefined;
+  let store2: AuditTrailStoreView | undefined;
+
+  try {
+    store1 = new SqliteAuditTrailStore({ dbPath });
+    await store1.append(makeEvent({ caseId: "case-chain", eventType: "case.created", action: "create_case" }));
+    await store1.append(makeEvent({ caseId: "case-chain", eventType: "artifact.added", action: "add_artifact", occurredAt: "2026-03-31T10:02:00.000Z", recordedAt: "2026-03-31T10:02:00.000Z" }));
+    await store1.append(makeEvent({ caseId: "case-chain", eventType: "packet.finalized", action: "finalize_packet", occurredAt: "2026-03-31T10:05:00.000Z", recordedAt: "2026-03-31T10:05:00.000Z" }));
+
+    const firstRead = (await store1.listByCase("case-chain")) as ChainedAuditEventRecord[];
+    assert.equal(firstRead.length, 3);
+    assert.ok(firstRead.every((event) => typeof event.chainHash === "string" && event.chainHash.length === 64));
+
+    const firstVerification = verifyAuditChain(firstRead);
+    assert.deepStrictEqual(firstVerification, {
+      valid: true,
+      verifiedCount: 3,
+    });
+    assert.equal(await store1.getLastChainHash(), firstRead.at(-1)?.chainHash);
+
+    store1.close();
+    store1 = undefined;
+
+    store2 = new SqliteAuditTrailStore({ dbPath });
+    const secondRead = (await store2.listByCase("case-chain")) as ChainedAuditEventRecord[];
+    assert.equal(secondRead.length, 3);
+    assert.deepStrictEqual(
+      secondRead.map((event) => event.chainHash),
+      firstRead.map((event) => event.chainHash),
+    );
+
+    const secondVerification = verifyAuditChain(secondRead);
+    assert.deepStrictEqual(secondVerification, {
+      valid: true,
+      verifiedCount: 3,
+    });
+    assert.equal(await store2.getLastChainHash(), secondRead.at(-1)?.chainHash);
+  } finally {
+    store2?.close();
+    store1?.close();
     rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
   }
 });

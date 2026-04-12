@@ -18,6 +18,11 @@ async function main() {
   let shuttingDown = false;
 
   const apiKey = process.env.API_KEY?.trim() || undefined;
+  const jwtSecret = process.env.JWT_SECRET?.trim() || undefined;
+  const jwtPublicKey = process.env.JWT_PUBLIC_KEY?.replace(/\\n/g, "\n").trim() || undefined;
+  const jwtIssuer = process.env.JWT_ISSUER?.trim() || undefined;
+  const jwtAudience = process.env.JWT_AUDIENCE?.trim() || undefined;
+  const jwtTyp = process.env.JWT_TYP?.trim() || undefined;
   const nodeEnv = process.env.NODE_ENV?.trim().toLowerCase() || undefined;
   const allowInsecureDevAuth = (process.env.ALLOW_INSECURE_DEV_AUTH?.trim().toLowerCase() === "true");
   const rateLimitRpm = Number(process.env.RATE_LIMIT_RPM ?? "0") || undefined;
@@ -28,9 +33,9 @@ async function main() {
     .map((value) => value.trim().toLowerCase())
     .filter((value) => value.length > 0);
 
-  if (!apiKey && allowInsecureDevAuth) {
+  if (!apiKey && !jwtSecret && !jwtPublicKey && allowInsecureDevAuth) {
     process.stdout.write(
-      "[WARN] API_KEY is not set — unauthenticated access is enabled only because ALLOW_INSECURE_DEV_AUTH=true was explicitly configured.\n",
+      "[WARN] API_KEY, JWT_SECRET, and JWT_PUBLIC_KEY are not set — unauthenticated access is enabled only because ALLOW_INSECURE_DEV_AUTH=true was explicitly configured.\n",
     );
   }
 
@@ -41,6 +46,11 @@ async function main() {
   const { app, closeStore } = bootstrap({
     isShuttingDown: () => shuttingDown,
     apiKey,
+    jwtSecret,
+    jwtPublicKey,
+    jwtIssuer,
+    jwtAudience,
+    jwtTyp,
     allowInsecureDevAuth,
     nodeEnv,
     rateLimitRpm,

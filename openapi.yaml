@@ -12,6 +12,11 @@ info:
 
     Authentication model:
     - application endpoints expect `Authorization: Bearer <API_KEY>` when `API_KEY` is configured;
+    - application endpoints also accept `Authorization: Bearer <JWT>` when `JWT_SECRET` or `JWT_PUBLIC_KEY` is configured;
+    - `JWT_SECRET` and `JWT_PUBLIC_KEY` are mutually exclusive JWT verifier modes;
+    - when `API_KEY` and one JWT verifier mode are configured, either bearer mechanism may be used;
+    - JWTs must carry a non-empty `sub`, must satisfy configured `iss`/`aud` constraints, and may additionally be required to match a configured JOSE `typ` value;
+    - `JWT_PUBLIC_KEY` enables RS256 verification and requires an RSA public key with modulus length >= 2048 bits;
     - unauthenticated startup is allowed only when `ALLOW_INSECURE_DEV_AUTH=true` is explicitly set;
     - the insecure development override is rejected when `NODE_ENV=production`.
 
@@ -57,6 +62,7 @@ tags:
     description: Liveness and readiness probes.
 security:
   - bearerAuth: []
+  - jwtBearer: []
 paths:
   /api/cases:
     post:
@@ -394,7 +400,10 @@ paths:
       tags: [Packets]
       summary: Draft physician packet
       operationId: createPhysicianPacket
-      description: Draft a workflow packet from the current case state. At least one artifact must already exist.
+      description: |
+        Draft a physician packet from current case state. Under JWT bearer auth, `requestedBy` is bound to the
+        authenticated JWT `sub` and mismatched caller-supplied identities are rejected. At least one artifact must
+        already exist.
       requestBody:
         required: true
         content:
@@ -409,7 +418,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/PhysicianPacketCreateResponse'
         '400':
-          $ref: '#/components/responses/ValidationError'
+          $ref: '#/components/responses/BadRequestError'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '404':
@@ -443,6 +452,9 @@ paths:
       tags: [Reviews]
       summary: Submit clinician review
       operationId: submitReview
+      description: |
+        Append a review entry. When JWT bearer auth is used, `reviewerName` is bound to the authenticated JWT `sub`
+        and the principal must carry either the `reviewer` or `clinician` role.
       requestBody:
         required: true
         content:
@@ -457,9 +469,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/ReviewCreateResponse'
         '400':
-          $ref: '#/components/responses/ValidationError'
+          $ref: '#/components/responses/BadRequestError'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
         '404':
           $ref: '#/components/responses/NotFoundError'
         '409':
@@ -469,7 +483,9 @@ paths:
     get:
       tags: [Reviews]
       summary: Get review ledger
-      operationId: getPacketReviews
+      description: |
+        Finalize a clinician-approved packet that is not stale. When JWT bearer auth is used, `finalizedBy` is bound
+        to the authenticated JWT `sub` and the principal must carry the `clinician` role.
       responses:
         '200':
           description: Review ledger returned.
@@ -506,9 +522,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/PhysicianPacketCreateResponse'
         '400':
-          $ref: '#/components/responses/ValidationError'
+          $ref: '#/components/responses/BadRequestError'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
         '404':
           $ref: '#/components/responses/NotFoundError'
         '409':
@@ -535,6 +553,34 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuditEventListResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+  /api/audit-chain/verify:
+    get:
+      tags: [Audit]
+      summary: Verify audit hash chain for one case
+      operationId: verifyAuditChainByCase
+      description: |
+        Recompute and verify the SHA-256 audit hash chain for all events returned by one `caseId`.
+        This is a read-only tamper-evidence check and does not mutate stored events.
+      parameters:
+        - name: caseId
+          in: query
+          required: true
+          description: Case identifier whose append-only audit chain should be verified.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Audit chain verification result returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditChainVerificationResponse'
+        '400':
+          $ref: '#/components/responses/ErrorResponse400'
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '429':
@@ -608,6 +654,11 @@ components:
       type: http
       scheme: bearer
       bearerFormat: opaque API key
+    jwtBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT bearer token validated via HS256 when `JWT_SECRET` is configured or via RS256 when `JWT_PUBLIC_KEY` is configured. Runtime validation enforces signature, `exp`, `iat`, `nbf`, non-empty `sub`, configured `iss`/`aud`, optional JOSE `typ`, and an RSA-2048 minimum for RS256 verification keys.
   parameters:
     CaseId:
       name: caseId
@@ -653,6 +704,14 @@ components:
         minimum: 0
         default: 0
   responses:
+    BadRequestError:
+      description: Request validation or request-governance error.
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - $ref: '#/components/schemas/ValidationErrorResponse'
+              - $ref: '#/components/schemas/ErrorResponse'
     ValidationError:
       description: Request validation failed.
       content:
@@ -666,6 +725,12 @@ components:
           description: Bearer authentication challenge.
           schema:
             type: string
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ForbiddenError:
+      description: Authenticated principal is not allowed to perform this action.
       content:
         application/json:
           schema:
@@ -1241,7 +1306,7 @@ components:
     AuditEventRecord:
       type: object
       additionalProperties: false
-      required: [auditId, eventId, caseId, eventType, action, occurredAt, recordedAt, outcome, correlationId, schemaVersion]
+      required: [auditId, eventId, caseId, eventType, action, occurredAt, recordedAt, outcome, correlationId, schemaVersion, chainHash]
       properties:
         auditId:
           type: string
@@ -1283,6 +1348,7 @@ components:
           format: date-time
         actorId:
           type: string
+          description: Optional workflow actor. Authenticated requests populate this from the bearer principal when a route does not supply a domain-specific actor; JWT-backed packet draft/review/finalize routes bind this to the authenticated `sub` rather than trusting request-body identities.
         outcome:
           type: string
           const: success
@@ -1295,6 +1361,9 @@ components:
         schemaVersion:
           type: integer
           const: 1
+        chainHash:
+          type: string
+          description: SHA-256 hash-chain value computed from the previous event hash plus the canonicalized current event.
         details:
           type: object
           additionalProperties: true
@@ -1511,6 +1580,30 @@ components:
             $ref: '#/components/schemas/AuditEventRecord'
         meta:
           $ref: '#/components/schemas/PaginationMeta'
+    AuditChainVerificationResult:
+      type: object
+      additionalProperties: false
+      required: [valid, verifiedCount]
+      properties:
+        valid:
+          type: boolean
+        verifiedCount:
+          type: integer
+          minimum: 0
+        brokenAtIndex:
+          type: integer
+          minimum: 0
+        expectedHash:
+          type: string
+        actualHash:
+          type: string
+    AuditChainVerificationResponse:
+      type: object
+      additionalProperties: false
+      required: [result]
+      properties:
+        result:
+          $ref: '#/components/schemas/AuditChainVerificationResult'
     OperationsSummaryResponse:
       type: object
       additionalProperties: false
@@ -1837,6 +1930,7 @@ components:
           type: string
           minLength: 1
           maxLength: 120
+          description: Optional caller label. When JWT bearer auth is used, if provided it must match the authenticated JWT `sub`; otherwise the server fills it from `sub`.
         focus:
           type: string
           minLength: 1
@@ -1844,12 +1938,13 @@ components:
     SubmitReviewRequest:
       type: object
       additionalProperties: false
-      required: [reviewerName, action]
+      required: [action]
       properties:
         reviewerName:
           type: string
           minLength: 1
           maxLength: 120
+          description: Required for API-key or insecure-dev review submission. Optional under JWT bearer auth, where the server binds reviewer identity to the authenticated `sub` and rejects mismatches.
         action:
           $ref: '#/components/schemas/ReviewAction'
         comments:
@@ -1859,12 +1954,12 @@ components:
     FinalizePacketRequest:
       type: object
       additionalProperties: false
-      required: [finalizedBy]
       properties:
         finalizedBy:
           type: string
           minLength: 1
           maxLength: 120
+          description: Required for API-key or insecure-dev finalization. Optional under JWT bearer auth, where the server binds finalizer identity to the authenticated `sub` and rejects mismatches.
         reason:
           type: string
           minLength: 1

@@ -16,9 +16,20 @@ export {
 	DEFAULT_ANONYMOUS_ACTOR_ID,
 	toAuditContext,
 } from "./anamnesis/audit-identity";
+export {
+	canPrincipalAccessCase,
+	createOwnerScopedAccessControl,
+	filterCasesForPrincipal,
+} from "./anamnesis/access-control";
 export { buildArtifactEvidenceLineage, stableClinicalReviewSignature } from "./anamnesis/evidence-lineage";
 export {
 	createPendingQcSummary,
 	createQcSummaryRecord,
 	createStudyContextRecord,
 } from "./anamnesis/specialty-context";
+export {
+	canonicalizeAuditEvent,
+	computeChainHash,
+	GENESIS_CHAIN_HASH,
+	verifyAuditChain,
+} from "../core/audit-events";

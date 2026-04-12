@@ -6,12 +6,12 @@ export const createPacketSchema = z.strictObject({
 });
 
 export const submitReviewSchema = z.strictObject({
-  reviewerName: z.string().trim().min(1).max(120),
+  reviewerName: z.string().trim().min(1).max(120).optional(),
   action: z.enum(["approved", "changes_requested", "rejected"]),
   comments: z.string().trim().min(1).max(4000).optional(),
 });
 
 export const finalizePacketSchema = z.strictObject({
-  finalizedBy: z.string().trim().min(1).max(120),
+  finalizedBy: z.string().trim().min(1).max(120).optional(),
   reason: z.string().trim().min(1).max(4000).optional(),
 });

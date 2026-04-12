@@ -1,7 +1,7 @@
-import { AUDIT_EVENT_SCHEMA_VERSION, validateAuditEventRecord } from "../core/audit-events";
-import type { AuditEventRecord } from "../domain/anamnesis";
+import { AUDIT_EVENT_SCHEMA_VERSION, GENESIS_CHAIN_HASH, validateAuditEventRecord } from "../core/audit-events";
+import type { AuditEventRecord, ChainedAuditEventRecord } from "../domain/anamnesis";
 
-export const AUDIT_EVENT_SELECT_FIELDS = `audit_id, event_id, schema_version, case_id, packet_id, event_type, action, occurred_at, recorded_at, actor_id, outcome, correlation_id, causation_id, details_json`;
+export const AUDIT_EVENT_SELECT_FIELDS = `audit_id, event_id, schema_version, case_id, packet_id, event_type, action, occurred_at, recorded_at, actor_id, outcome, correlation_id, causation_id, details_json, chain_hash`;
 
 export interface SqliteAuditEventRow {
   audit_id: string;
@@ -18,10 +18,11 @@ export interface SqliteAuditEventRow {
   correlation_id: string | null;
   causation_id: string | null;
   details_json: string;
+  chain_hash: string | null;
 }
 
-export function mapSqliteAuditEventRow(row: SqliteAuditEventRow): AuditEventRecord {
-  return validateAuditEventRecord({
+export function mapSqliteAuditEventRow(row: SqliteAuditEventRow): ChainedAuditEventRecord {
+  const base = validateAuditEventRecord({
     auditId: row.audit_id,
     eventId: row.event_id ?? row.audit_id,
     caseId: row.case_id,
@@ -37,4 +38,5 @@ export function mapSqliteAuditEventRow(row: SqliteAuditEventRow): AuditEventReco
     causationId: row.causation_id ?? undefined,
     schemaVersion: row.schema_version ?? AUDIT_EVENT_SCHEMA_VERSION,
   });
+  return { ...base, chainHash: row.chain_hash ?? GENESIS_CHAIN_HASH };
 }

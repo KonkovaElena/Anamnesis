@@ -8,6 +8,13 @@ The format is based on Keep a Changelog and the project uses Semantic Versioning
 
 ### Added
 
+- **R-01 tamper-evident audit trail**: SHA-256 hash-chain on all audit events; `GENESIS_CHAIN_HASH`, `computeChainHash()`, `canonicalizeAuditEvent()`, and `verifyAuditChain()` in `src/core/audit-events.ts`; `chainHash` field stored in both InMemory and SQLite audit stores; 16 dedicated hash-chain tests;
+- **R-03 JWT Bearer authentication**: JWT verification in `src/core/jwt-verification.ts` now supports HS256 shared-secret validation and RS256 public-key validation (zero external dependencies); auth middleware supports both API key and JWT Bearer tokens with principal extraction; `JWT_SECRET`, `JWT_PUBLIC_KEY`, `JWT_ISSUER`, and `JWT_AUDIENCE` env vars; `request.principal` populated with `RequestPrincipal` including roles and claims; dedicated JWT unit and integration coverage in `tests/jwt-auth.test.ts` and `tests/auth.test.ts`;
+- **R-02 LLM sidecar domain port**: `LlmSidecar`, `LlmDraftAssistanceInput`, and `LlmDraftAssistanceResult` interfaces in domain layer for Phase 3 retrieval-backed packet enrichment; `NoOpLlmSidecar` stub adapter in infrastructure; 5 contract tests;
+- authenticated principal propagation into audit events for routes that do not already provide a workflow-specific actor, plus `GET /api/audit-chain/verify` for operator-visible hash-chain verification;
+- persisted SQLite hash-chain verification coverage in `tests/audit-store.test.ts` and a checked-in `.env.example` for runtime configuration bootstrapping;
+- JWT packet governance: under JWT bearer auth, `requestedBy`, `reviewerName`, and `finalizedBy` are bound to the authenticated subject, spoofed identity fields are rejected, and packet review/finalize enforce minimal role checks (`reviewer`/`clinician`);
+- stricter JWT verification: `nbf` is enforced, non-empty `sub` is required, malformed `roles` are rejected, optional JOSE `typ` matching is supported via `JWT_TYP`, weak HS256 secrets are rejected in production bootstrap, weak RS256 verification keys are rejected with an RSA-2048 floor, and `JWT_SECRET` / `JWT_PUBLIC_KEY` dual configuration is rejected at bootstrap;
 - cursor-based pagination (`limit`, `offset` query params) on `GET /api/cases` and `GET /api/cases/:caseId/audit-events`; default page size 100, maximum 1000;
 - versioned encryption token format (`v1:iv:tag:ciphertext`) with backward-compatible decryption of legacy 3-part tokens, enabling future key rotation without data loss;
 - IPv4-mapped IPv6 address normalization in rate limiter (`::ffff:x.x.x.x → x.x.x.x`) preventing per-family key bypass;

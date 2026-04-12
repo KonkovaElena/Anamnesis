@@ -15,6 +15,7 @@ import {
   createQcSummaryRecord,
   createStudyContextRecord,
 } from "./specialty-context";
+import { createOwnerScopedAccessControl } from "./access-control";
 
 function toIso(now: Date): string {
   return now.toISOString();
@@ -35,11 +36,18 @@ function markPacketsStale(
   );
 }
 
-export function createCase(input: CreateCaseInput, now = new Date()): AnamnesisCase {
+export function createCase(
+  input: CreateCaseInput,
+  now = new Date(),
+  options?: { ownerPrincipalId?: string },
+): AnamnesisCase {
   const timestamp = toIso(now);
   return {
     caseId: randomUUID(),
     patientLabel: input.patientLabel,
+    accessControl: options?.ownerPrincipalId
+      ? createOwnerScopedAccessControl(options.ownerPrincipalId)
+      : undefined,
     workflowFamily: input.workflowFamily ?? "GENERAL_INTAKE",
     status: "INTAKING",
     createdAt: timestamp,
