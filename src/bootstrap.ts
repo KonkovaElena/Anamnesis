@@ -7,8 +7,10 @@ import { InMemoryAnamnesisStore } from "./infrastructure/InMemoryAnamnesisStore"
 import { InMemoryAuditTrailStore } from "./infrastructure/InMemoryAuditTrailStore";
 import { parseEncryptionKey } from "./infrastructure/encryption";
 import { HttpExternalAttachmentFetcher } from "./infrastructure/HttpExternalAttachmentFetcher";
+import { NoOpLlmSidecar } from "./infrastructure/NoOpLlmSidecar";
 import { SqliteAuditTrailStore } from "./infrastructure/SqliteAuditTrailStore";
 import { SqliteAnamnesisStore } from "./infrastructure/SqliteAnamnesisStore";
+import type { LlmSidecar } from "./domain/anamnesis";
 
 export interface BootstrapOptions {
   isShuttingDown?: () => boolean;
@@ -26,6 +28,7 @@ export interface BootstrapOptions {
   encryptionKey?: string;
   externalAttachmentFetcher?: ExternalAttachmentFetcher;
   externalAttachmentAllowedHosts?: string[];
+  llmSidecar?: LlmSidecar;
 }
 
 function assertProductionJwtSecretStrength(jwtSecret: string | undefined, nodeEnv: string | undefined): void {
@@ -86,6 +89,7 @@ export function bootstrap(options?: BootstrapOptions) {
   });
   const externalAttachmentFetcher = options?.externalAttachmentFetcher
     ?? httpExternalAttachmentFetcher.fetchAttachment.bind(httpExternalAttachmentFetcher);
+  const llmSidecar = options?.llmSidecar ?? new NoOpLlmSidecar();
 
   if (options?.storePath) {
     if (!options.encryptionKey) {
@@ -142,6 +146,7 @@ export function bootstrap(options?: BootstrapOptions) {
     authMiddleware,
     rateLimitRpm: options?.rateLimitRpm,
     externalAttachmentFetcher,
+    llmSidecar,
   });
 
   return {

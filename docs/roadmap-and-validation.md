@@ -55,7 +55,7 @@ These are repository-operations tasks, not product-scope upgrades.
 3. ~~Tighten the audit-integrity narrative: keep append-only workflow history as implemented truth, but treat sealing, notarization, and stronger confidentiality boundaries as explicit backlog.~~ **Done (R-01)**: SHA-256 hash-chain on audit trail with genesis hash, chain verification, and tamper-detection API.
 4. Add remote JWKS retrieval and cache control, richer sharing policy, or tenant-scoped RBAC only if the standalone needs collaboration beyond the current revocable owner-admin sharing model.
 5. Close the GitHub-side dependency-graph and repository-protection gap recorded in the post-push audit.
-6. **Phase 3 prep (R-02)**: `LlmSidecar` domain port and `NoOpLlmSidecar` stub adapter are contract-ready for retrieval-backed packet enrichment once an LLM adapter is integrated.
+6. **Phase 3 starter (R-02)**: `LlmSidecar` is now wired into packet drafting as an optional fail-closed enrichment seam. The default runtime still uses `NoOpLlmSidecar`; shipping a real retrieval-backed local model adapter, rationale capture, and stronger evaluation packs remains explicit Phase 3 backlog.
 
 ## Current Extraction Foundations
 

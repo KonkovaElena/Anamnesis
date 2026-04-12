@@ -1,5 +1,13 @@
 import type { Express, Request, RequestHandler, Response } from "express";
-import { draftPhysicianPacket, finalizePhysicianPacket, submitReview } from "../../domain/anamnesis";
+import {
+  draftPhysicianPacket,
+  finalizePhysicianPacket,
+  submitReview,
+  type AnamnesisCase,
+  type CreatePhysicianPacketInput,
+  type LlmDraftAssistanceInput,
+  type LlmDraftAssistanceResult,
+} from "../../domain/anamnesis";
 import { createPacketSchema, finalizePacketSchema, submitReviewSchema } from "./schemas";
 import {
   appendAuditEvent,
@@ -8,6 +16,62 @@ import {
   readRouteParam,
   type RouteDependencies,
 } from "./shared";
+
+const LLM_DRAFT_MAX_TOKENS = 1024;
+
+async function maybeAssistDraft(
+  record: AnamnesisCase,
+  input: CreatePhysicianPacketInput,
+  llmSidecar: RouteDependencies["llmSidecar"],
+): Promise<LlmDraftAssistanceResult | undefined> {
+  if (!llmSidecar) {
+    return undefined;
+  }
+
+  const assistanceInput: LlmDraftAssistanceInput = {
+    caseId: record.caseId,
+    intake: record.intake,
+    focus: input.focus,
+    maxTokens: LLM_DRAFT_MAX_TOKENS,
+    artifacts: record.artifacts.map((artifact) => ({
+      artifactId: artifact.artifactId,
+      artifactType: artifact.artifactType,
+      title: artifact.title,
+      summary: artifact.summary,
+    })),
+  };
+
+  try {
+    if (!(await llmSidecar.isAvailable())) {
+      return undefined;
+    }
+
+    return await llmSidecar.assistDraft(assistanceInput);
+  } catch {
+    return undefined;
+  }
+}
+
+function mergeDraftAssistance(
+  result: ReturnType<typeof draftPhysicianPacket>,
+  assistance: LlmDraftAssistanceResult,
+): ReturnType<typeof draftPhysicianPacket> {
+  const packet = {
+    ...result.packet,
+    disclaimer: [result.packet.disclaimer, assistance.disclaimer].filter((value) => value.trim().length > 0).join(" "),
+    sections: [...result.packet.sections, ...assistance.sections],
+  };
+
+  return {
+    packet,
+    nextCase: {
+      ...result.nextCase,
+      physicianPackets: result.nextCase.physicianPackets.map((candidate) => (
+        candidate.packetId === packet.packetId ? packet : candidate
+      )),
+    },
+  };
+}
 
 function respondForbidden(response: Response, message: string): void {
   response.status(403).json({
@@ -64,7 +128,7 @@ function resolveGovernedActor(
 
 export function registerPacketRoutes(
   app: Express,
-  { store, auditStore }: RouteDependencies,
+  { store, auditStore, llmSidecar }: RouteDependencies,
   parseJson: RequestHandler,
 ): void {
   app.post("/api/cases/:caseId/physician-packets", parseJson, async (request, response) => {
@@ -83,10 +147,14 @@ export function registerPacketRoutes(
       return;
     }
 
-    const result = draftPhysicianPacket(record, {
+    const packetInput = {
       ...input,
       requestedBy,
-    });
+    };
+    const assistance = await maybeAssistDraft(record, packetInput, llmSidecar);
+    const result = assistance
+      ? mergeDraftAssistance(draftPhysicianPacket(record, packetInput), assistance)
+      : draftPhysicianPacket(record, packetInput);
     await store.saveCase(result.nextCase);
     await appendAuditEvent(
       auditStore,
@@ -102,6 +170,15 @@ export function registerPacketRoutes(
         details: {
           artifactCount: result.packet.artifactIds.length,
           hasFocus: Boolean(result.packet.focus),
+          ...(assistance
+            ? {
+                llmDraftAssistanceModel: assistance.model,
+                llmDraftAssistancePromptTokens: assistance.promptTokens,
+                llmDraftAssistanceCompletionTokens: assistance.completionTokens,
+                llmDraftAssistanceDurationMs: assistance.durationMs,
+                llmDraftAssistanceSectionCount: assistance.sections.length,
+              }
+            : {}),
         },
       },
     );

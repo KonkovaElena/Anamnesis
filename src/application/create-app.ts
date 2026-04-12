@@ -3,7 +3,13 @@ import express, { type NextFunction, type Request, type Response } from "express
 import helmet from "helmet";
 import { ZodError } from "zod";
 import { createRateLimiter } from "./rate-limiter";
-import { AnamnesisDomainError, type AnamnesisStore, type AuditTrailStore, type ExternalAttachmentFetcher } from "../domain/anamnesis";
+import {
+  AnamnesisDomainError,
+  type AnamnesisStore,
+  type AuditTrailStore,
+  type ExternalAttachmentFetcher,
+  type LlmSidecar,
+} from "../domain/anamnesis";
 import { registerCaseRoutes } from "./create-app/case-routes";
 import { registerIngestionRoutes } from "./create-app/ingestion-routes";
 import { registerOpsRoutes } from "./create-app/ops-routes";
@@ -17,6 +23,7 @@ interface CreateAppDependencies {
   authMiddleware?: (request: Request, response: Response, next: NextFunction) => void;
   rateLimitRpm?: number;
   externalAttachmentFetcher?: ExternalAttachmentFetcher;
+  llmSidecar?: LlmSidecar;
 }
 
 export function createApp({
@@ -26,6 +33,7 @@ export function createApp({
   authMiddleware,
   rateLimitRpm,
   externalAttachmentFetcher,
+  llmSidecar,
 }: CreateAppDependencies) {
   const app = express();
   const parseJson = express.json({ limit: "256kb" });
@@ -70,6 +78,7 @@ export function createApp({
     auditStore,
     externalAttachmentFetcher,
     isShuttingDown,
+    llmSidecar,
   };
 
   registerCaseRoutes(app, routeDependencies, parseJson);

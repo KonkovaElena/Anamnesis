@@ -86,6 +86,7 @@ The current security baseline is intentionally modest but explicit:
 Current non-claims remain important:
 
 - no full tenant RBAC model or fine-grained per-field access policy;
+- no autonomous diagnosis, treatment recommendation, or always-on model-generated packet workflow; a configured local LLM sidecar may append bounded draft-assistance sections, but packet drafting still remains clinician-review-first and fail-closed when no sidecar is available;
 - no cryptographically sealed audit log;
 - no automated encrypted-store key rotation, restore-drill orchestration, or disaster-recovery automation;
 - TLS is expected to be handled by deployment infrastructure, not by the Node process itself.

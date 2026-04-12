@@ -5,6 +5,7 @@ import type {
   AuditTrailStore,
   CreateAuditEventInput,
   ExternalAttachmentFetcher,
+  LlmSidecar,
   OperationsSummary,
   PhysicianPacket,
 } from "../../domain/anamnesis";
@@ -19,6 +20,7 @@ export interface RouteDependencies {
   store: AnamnesisStore;
   auditStore: AuditTrailStore;
   externalAttachmentFetcher?: ExternalAttachmentFetcher;
+  llmSidecar?: LlmSidecar;
   isShuttingDown?: () => boolean;
 }
 

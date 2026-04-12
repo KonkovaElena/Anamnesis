@@ -77,7 +77,7 @@ This is an organizational workflow API, not a diagnostic or treatment API.
 | `/api/cases/{caseId}/document-ingestions` | `POST` | Normalize bounded text into a source artifact plus ingestion metadata. |
 | `/api/cases/{caseId}/fhir-imports` | `POST` | Import one supported inline FHIR resource into a source artifact. |
 | `/api/cases/{caseId}/fhir-bundle-imports` | `POST` | Import one supported FHIR bundle into one or more source artifacts. `document` bundles must include the standard document envelope for this slice. |
-| `/api/cases/{caseId}/physician-packets` | `POST` | Draft a physician packet from the current case state. Under JWT, `requestedBy` is bound to the authenticated `sub`. |
+| `/api/cases/{caseId}/physician-packets` | `POST` | Draft a physician packet from the current case state. Under JWT, `requestedBy` is bound to the authenticated `sub`. When a local `LlmSidecar` is configured and available, the route may append bounded draft-assistance sections and flat enrichment metadata in the corresponding `packet.drafted` audit event; if the sidecar is absent or errors, drafting remains deterministic and succeeds without model output. |
 | `/api/cases/{caseId}/physician-packets` | `GET` | List packet drafts for a case with `meta.totalPackets`. |
 | `/api/cases/{caseId}/physician-packets/{packetId}/reviews` | `POST` | Append a clinician review entry. Under JWT, `reviewerName` is bound to the authenticated `sub`, and the principal must hold `reviewer` or `clinician`. |
 | `/api/cases/{caseId}/physician-packets/{packetId}/reviews` | `GET` | Return the review ledger for one packet. |
@@ -111,6 +111,7 @@ Document and FHIR import responses now expose explicit profile metadata so clien
 - `actorId` is populated from the authenticated bearer principal when the route does not already provide a domain-specific actor; JWT-backed packet draft/review/finalize routes also bind their actor-bearing fields to the authenticated subject instead of trusting the request body.
 - `case.shared` audit events record `details.sharedPrincipalId` for grant actions.
 - `case.unshared` audit events record `details.revokedPrincipalId` for revoke actions.
+- sidecar-assisted packet drafts record flat `details.llmDraftAssistance*` scalar fields such as model, token counts, duration, and section count when enrichment was actually applied.
 - ingestion-related audit events include normalization and import profile metadata inside `details`.
 - extraction-related audit events cover sample registration, study-context attachment, and QC-summary recording.
 - evidence-lineage reads are intentionally read-only and do not emit audit events in the current slice.
