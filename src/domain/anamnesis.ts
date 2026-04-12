@@ -3,6 +3,7 @@ export {
 	addArtifact,
 	attachStudyContext,
 	createCase,
+	grantCaseAccess,
 	recordQcSummary,
 	registerSample,
 	removeArtifact,
@@ -20,6 +21,7 @@ export {
 	canPrincipalAccessCase,
 	createOwnerScopedAccessControl,
 	filterCasesForPrincipal,
+	grantCasePrincipalAccess,
 } from "./anamnesis/access-control";
 export { buildArtifactEvidenceLineage, stableClinicalReviewSignature } from "./anamnesis/evidence-lineage";
 export {

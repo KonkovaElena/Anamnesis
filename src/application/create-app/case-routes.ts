@@ -1,4 +1,4 @@
-import type { Express, RequestHandler } from "express";
+import type { Express, Request, RequestHandler, Response } from "express";
 import {
   addArtifact,
   attachStudyContext,
@@ -6,6 +6,7 @@ import {
   canPrincipalAccessCase,
   createCase,
   filterCasesForPrincipal,
+  grantCaseAccess,
   recordQcSummary,
   registerSample,
   removeArtifact,
@@ -15,6 +16,7 @@ import {
   addArtifactSchema,
   attachStudyContextSchema,
   createCaseSchema,
+  grantCaseAccessSchema,
   recordQcSummarySchema,
   registerSampleSchema,
 } from "./schemas";
@@ -25,6 +27,26 @@ import {
   respondCaseNotFound,
   type RouteDependencies,
 } from "./shared";
+
+function respondForbidden(response: Response, message: string): void {
+  response.status(403).json({
+    code: "forbidden",
+    message,
+  });
+}
+
+function canManageCaseAccess(record: { accessControl?: { ownerPrincipalId: string } }, principal?: Request["principal"]): boolean {
+  if (!principal) {
+    return false;
+  }
+
+  if (principal.authMechanism === "api-key") {
+    return true;
+  }
+
+  return principal.authMechanism === "jwt-bearer"
+    && record.accessControl?.ownerPrincipalId === principal.actorId;
+}
 
 export function registerCaseRoutes(
   app: Express,
@@ -81,6 +103,40 @@ export function registerCaseRoutes(
     }
 
     response.json({ case: record });
+  });
+
+  app.post("/api/cases/:caseId/access-grants", parseJson, async (request, response) => {
+    const record = await loadCaseOrRespondNotFound(store, request, response, readRouteParam(request.params.caseId));
+    if (!record) {
+      return;
+    }
+
+    if (!canManageCaseAccess(record, request.principal)) {
+      respondForbidden(response, "Only the case owner or API-key operator can grant case access.");
+      return;
+    }
+
+    const input = grantCaseAccessSchema.parse(request.body ?? {});
+    const nextCase = grantCaseAccess(record, input.principalId);
+    if (nextCase !== record) {
+      await store.saveCase(nextCase);
+      await appendAuditEvent(
+        auditStore,
+        request,
+        response,
+        {
+          caseId: nextCase.caseId,
+          eventType: "case.shared",
+          action: "grant_case_access",
+          occurredAt: nextCase.updatedAt,
+          details: {
+            sharedPrincipalId: input.principalId,
+          },
+        },
+      );
+    }
+
+    response.json({ case: nextCase });
   });
 
   app.get("/api/cases/:caseId/evidence-lineage", async (request, response) => {
@@ -292,11 +348,26 @@ export function registerCaseRoutes(
 
     const events = await auditStore.listByCase(caseId, pagination);
     if (!record && request.principal?.authMechanism === "jwt-bearer") {
+      const allowedPrincipalIds = new Set<string>();
       const creatorActorId = events.find((event) => event.eventType === "case.created")?.actorId;
+      if (creatorActorId && creatorActorId !== "api-key-holder") {
+        allowedPrincipalIds.add(creatorActorId);
+      }
+
+      for (const event of events) {
+        if (event.eventType === "case.shared") {
+          const sharedPrincipalId = typeof event.details?.sharedPrincipalId === "string"
+            ? event.details.sharedPrincipalId
+            : undefined;
+          if (sharedPrincipalId) {
+            allowedPrincipalIds.add(sharedPrincipalId);
+          }
+        }
+      }
+
       if (
-        creatorActorId
-        && creatorActorId !== "api-key-holder"
-        && creatorActorId !== request.principal.actorId
+        allowedPrincipalIds.size > 0
+        && !allowedPrincipalIds.has(request.principal.actorId)
       ) {
         respondCaseNotFound(response);
         return;

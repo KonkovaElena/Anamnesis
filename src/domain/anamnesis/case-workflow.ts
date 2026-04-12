@@ -15,7 +15,7 @@ import {
   createQcSummaryRecord,
   createStudyContextRecord,
 } from "./specialty-context";
-import { createOwnerScopedAccessControl } from "./access-control";
+import { createOwnerScopedAccessControl, grantCasePrincipalAccess } from "./access-control";
 
 function toIso(now: Date): string {
   return now.toISOString();
@@ -124,6 +124,31 @@ export function removeArtifact(
     updatedAt,
     artifacts,
     physicianPackets: markPacketsStale(record.physicianPackets, updatedAt),
+  };
+}
+
+export function grantCaseAccess(
+  record: AnamnesisCase,
+  principalId: string,
+  now = new Date(),
+): AnamnesisCase {
+  if (!record.accessControl) {
+    throw new AnamnesisDomainError(
+      "case_access_control_unavailable",
+      409,
+      "Case access cannot be granted for this case.",
+    );
+  }
+
+  const nextAccessControl = grantCasePrincipalAccess(record.accessControl, principalId);
+  if (nextAccessControl === record.accessControl) {
+    return record;
+  }
+
+  return {
+    ...record,
+    accessControl: nextAccessControl,
+    updatedAt: toIso(now),
   };
 }
 

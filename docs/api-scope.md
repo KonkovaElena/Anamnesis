@@ -1,7 +1,7 @@
 ---
 title: "Anamnesis API Scope"
 status: active
-version: "1.6.0"
+version: "1.7.0"
 last_updated: "2026-04-12"
 tags: [anamnesis, api, reference]
 ---
@@ -30,6 +30,7 @@ This is an organizational workflow API, not a diagnostic or treatment API.
 - Under JWT bearer auth, the packet workflow treats the authenticated JWT `sub` as the trusted workflow actor for `requestedBy`, `reviewerName`, and `finalizedBy` rather than trusting arbitrary body strings.
 - Under JWT bearer auth, packet review requires the `reviewer` or `clinician` role, and packet finalization requires the `clinician` role.
 - Under JWT bearer auth, newly created cases are owner-scoped to the authenticated subject; non-owner JWT principals do not see those cases in listing results and receive `404` on direct case-bound reads and writes.
+- A JWT case owner or an API-key operator can grant case access to another JWT principal through `POST /api/cases/{caseId}/access-grants`.
 - API-key bearer auth remains the shared-secret operator path and retains access to JWT-owned cases.
 
 ## Auth Configuration Surface
@@ -63,6 +64,7 @@ This is an organizational workflow API, not a diagnostic or treatment API.
 | `/api/cases` | `GET` | List cases with `meta.returnedCount`, `limit`, and `offset`. Under JWT bearer auth, only JWT-accessible cases are returned. |
 | `/api/cases/{caseId}` | `GET` | Return one case by id. |
 | `/api/cases/{caseId}` | `DELETE` | Delete a case and append `case.deleted` to the audit trail. |
+| `/api/cases/{caseId}/access-grants` | `POST` | Add another JWT principal to the case access list. Allowed to the JWT case owner or an API-key operator only. |
 | `/api/cases/{caseId}/artifacts` | `POST` | Register a source artifact and stale any active packet drafts. |
 | `/api/cases/{caseId}/artifacts/{artifactId}` | `DELETE` | Remove a source artifact and stale any active packet drafts. |
 | `/api/cases/{caseId}/evidence-lineage` | `GET` | Return a read-only artifact lineage graph plus artifact summary metadata for the case. |
@@ -104,6 +106,7 @@ Document and FHIR import responses now expose explicit profile metadata so clien
 - `correlationId` records the originating HTTP request correlation and mirrors the `x-request-id` header assigned when the event was created through the API.
 - `causationId` is optional and reserved for future chained event flows.
 - `actorId` is populated from the authenticated bearer principal when the route does not already provide a domain-specific actor; JWT-backed packet draft/review/finalize routes also bind their actor-bearing fields to the authenticated subject instead of trusting the request body.
+- `case.shared` audit events record `details.sharedPrincipalId` for grant-only sharing actions.
 - ingestion-related audit events include normalization and import profile metadata inside `details`.
 - extraction-related audit events cover sample registration, study-context attachment, and QC-summary recording.
 - evidence-lineage reads are intentionally read-only and do not emit audit events in the current slice.

@@ -2,6 +2,7 @@ export {
   addArtifactSchema,
   attachStudyContextSchema,
   createCaseSchema,
+  grantCaseAccessSchema,
   recordQcSummarySchema,
   registerSampleSchema,
 } from "./case-schemas";

@@ -16,6 +16,25 @@ export function createOwnerScopedAccessControl(ownerPrincipalId: string): CaseAc
   };
 }
 
+export function grantCasePrincipalAccess(
+  accessControl: CaseAccessControl,
+  principalId: string,
+): CaseAccessControl {
+  const normalizedPrincipalId = normalizePrincipalId(principalId);
+  if (normalizedPrincipalId.length === 0) {
+    throw new Error("principalId must be a non-empty string.");
+  }
+
+  if (accessControl.allowedPrincipalIds.includes(normalizedPrincipalId)) {
+    return accessControl;
+  }
+
+  return {
+    ...accessControl,
+    allowedPrincipalIds: [...accessControl.allowedPrincipalIds, normalizedPrincipalId],
+  };
+}
+
 export function canPrincipalAccessCase(
   record: Pick<AnamnesisCase, "accessControl">,
   principal?: Pick<RequestPrincipal, "authMechanism" | "actorId">,

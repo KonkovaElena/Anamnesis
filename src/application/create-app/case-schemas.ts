@@ -30,6 +30,10 @@ export const createCaseSchema = z.strictObject({
   }),
 });
 
+export const grantCaseAccessSchema = z.strictObject({
+  principalId: z.string().trim().min(1).max(200),
+});
+
 export const addArtifactSchema = z.strictObject({
   artifactType: artifactTypeSchema,
   artifactClass: artifactClassSchema.optional(),

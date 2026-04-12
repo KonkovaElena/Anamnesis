@@ -13,6 +13,7 @@ Anamnesis is designed as a narrow standalone slice for healthcare-adjacent workf
 - structured case intake and case lifecycle APIs;
 - workflow-family-aware case creation for general intake, MRI second-opinion, and mRNA board-review paths;
 - owner-scoped visibility for JWT-created cases, with API-key operator access retained as the shared-secret admin path;
+- grant-only case sharing so a JWT case owner or API-key operator can add another JWT principal to the case access list;
 - source artifact registration and removal with packet staleness tracking;
 - derived artifact metadata carry-through plus a read-only evidence-lineage graph route for lineage-aware evidence bundles;
 - molecular sample registration for case-scoped review workflows;
@@ -84,7 +85,7 @@ The current security baseline is intentionally modest but explicit:
 
 Current non-claims remain important:
 
-- no full tenant RBAC model, delegated case-sharing workflow, or fine-grained per-field access policy;
+- no full tenant RBAC model, access-revocation workflow, or fine-grained per-field access policy;
 - no cryptographically sealed audit log;
 - no automated encrypted-store key rotation, restore-drill orchestration, or disaster-recovery automation;
 - TLS is expected to be handled by deployment infrastructure, not by the Node process itself.

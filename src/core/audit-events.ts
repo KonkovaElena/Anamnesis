@@ -5,6 +5,7 @@ import { IdGenerator } from "./ids";
 
 export const AuditEventTypeSchema = z.enum([
   "case.created",
+  "case.shared",
   "sample.registered",
   "artifact.added",
   "artifact.removed",

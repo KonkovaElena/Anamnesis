@@ -141,6 +141,39 @@ paths:
           $ref: '#/components/responses/NotFoundError'
         '429':
           $ref: '#/components/responses/TooManyRequestsError'
+  /api/cases/{caseId}/access-grants:
+    parameters:
+      - $ref: '#/components/parameters/CaseId'
+    post:
+      tags: [Cases]
+      summary: Grant case access
+      operationId: grantCaseAccess
+      description: Add another JWT principal to the case access list. Allowed to the JWT case owner or an API-key operator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GrantCaseAccessRequest'
+      responses:
+        '200':
+          description: Case access granted and updated case returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseEnvelope'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
   /api/cases/{caseId}/evidence-lineage:
     parameters:
       - $ref: '#/components/parameters/CaseId'
@@ -1214,6 +1247,8 @@ components:
           format: uuid
         patientLabel:
           type: string
+        accessControl:
+          $ref: '#/components/schemas/CaseAccessControl'
         workflowFamily:
           $ref: '#/components/schemas/WorkflowFamily'
         status:
@@ -1326,6 +1361,7 @@ components:
           type: string
           enum:
             - case.created
+            - case.shared
             - sample.registered
             - artifact.added
             - artifact.removed
@@ -1465,6 +1501,17 @@ components:
       properties:
         case:
           $ref: '#/components/schemas/AnamnesisCase'
+    CaseAccessControl:
+      type: object
+      additionalProperties: false
+      required: [ownerPrincipalId, allowedPrincipalIds]
+      properties:
+        ownerPrincipalId:
+          type: string
+        allowedPrincipalIds:
+          type: array
+          items:
+            type: string
     CaseListResponse:
       type: object
       additionalProperties: false
@@ -1648,6 +1695,15 @@ components:
           $ref: '#/components/schemas/WorkflowFamily'
         intake:
           $ref: '#/components/schemas/CaseIntake'
+    GrantCaseAccessRequest:
+      type: object
+      additionalProperties: false
+      required: [principalId]
+      properties:
+        principalId:
+          type: string
+          minLength: 1
+          maxLength: 200
     AddArtifactRequest:
       type: object
       additionalProperties: false

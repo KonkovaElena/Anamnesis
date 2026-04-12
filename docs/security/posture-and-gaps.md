@@ -1,7 +1,7 @@
 ---
 title: "Anamnesis Security Posture And Gaps"
 status: active
-version: "1.5.0"
+version: "1.6.0"
 last_updated: "2026-04-12"
 tags: [anamnesis, security, evidence]
 ---
@@ -24,7 +24,7 @@ This page is implementation-grounded. It does not claim security controls that a
 
 | Threat surface | Current control | Current repo anchor | Residual note |
 | --- | --- | --- | --- |
-| Unauthenticated application access | Bearer token auth on application routes when `API_KEY`, `JWT_SECRET`, or `JWT_PUBLIC_KEY` is set | `src/application/auth-middleware.ts`, `src/bootstrap.ts`, `src/core/jwt-verification.ts` | API-key path remains shared-secret and operator-wide; JWT path can verify either HS256 shared-secret tokens or RS256 public-key tokens, is subject-bound, owner-scopes newly created cases, validates `sub`/`nbf`/configured `iss`/`aud`/optional `typ`, and applies packet-route role gates, but it is still not a full tenant/RBAC system |
+| Unauthenticated application access | Bearer token auth on application routes when `API_KEY`, `JWT_SECRET`, or `JWT_PUBLIC_KEY` is set | `src/application/auth-middleware.ts`, `src/bootstrap.ts`, `src/core/jwt-verification.ts` | API-key path remains shared-secret and operator-wide; JWT path can verify either HS256 shared-secret tokens or RS256 public-key tokens, is subject-bound, owner-scopes newly created cases, supports explicit grant-only sharing to named principals, validates `sub`/`nbf`/configured `iss`/`aud`/optional `typ`, and applies packet-route role gates, but it is still not a full tenant/RBAC system |
 | Silent fail-open startup | Secure-by-default bootstrap policy; unauthenticated startup now requires explicit `ALLOW_INSECURE_DEV_AUTH=true` and is blocked in production mode | `src/bootstrap.ts`, `src/index.ts` | Local-dev override still exists by design |
 | Brute-force or burst abuse | Per-IP sliding-window limiter via `RATE_LIMIT_RPM` with IPv4-mapped IPv6 normalization | `src/application/rate-limiter.ts`, `src/application/create-app.ts` | Disabled by default unless configured |
 | Header hardening | Helmet with CSP/HSTS/COOP/CORP/Referrer-Policy and related headers | `src/application/create-app.ts` | TLS termination is still deployment-side, not in-process |
@@ -45,6 +45,7 @@ This page is implementation-grounded. It does not claim security controls that a
 - In `NODE_ENV=production`, weak HS256 shared secrets are rejected at bootstrap; the current minimum is 32 bytes.
 - Weak RS256 verification keys are also rejected at bootstrap; the current minimum is an RSA public key with modulus length >= 2048 bits.
 - Under JWT bearer auth, newly created cases are owner-scoped to the authenticated subject, and non-owner JWT principals do not see or mutate those cases through case-bound routes.
+- A JWT case owner or an API-key operator can explicitly grant case access to another JWT principal; this is additive sharing only and does not yet provide revocation or richer policy semantics.
 - Under JWT bearer auth, packet workflow identity fields (`requestedBy`, `reviewerName`, `finalizedBy`) are bound to the authenticated JWT `sub` instead of trusting caller-supplied strings.
 - Under JWT bearer auth, packet review requires `reviewer` or `clinician`, and packet finalization requires `clinician`.
 
@@ -90,7 +91,7 @@ What is not yet true:
 ## Known Gaps
 
 1. TLS is expected to be handled by deployment infrastructure rather than by the Node process itself.
-2. The API-key path is still shared-secret based and operator-wide; the JWT path now supports HS256 and RS256 verification, owner-scoped case visibility, subject-bound identity, and route-level role enforcement, but it is not a full tenant/RBAC or delegated sharing system.
+2. The API-key path is still shared-secret based and operator-wide; the JWT path now supports HS256 and RS256 verification, owner-scoped case visibility, additive grant-only sharing, subject-bound identity, and route-level role enforcement, but it is not a full tenant/RBAC or revocation-capable sharing system.
 3. There is no central secret manager integration or automated key rotation workflow in this repository. See [crypto-agility-inventory.md](crypto-agility-inventory.md) for the migration plan.
 4. The audit trail is append-only in software terms, but not cryptographically sealed.
 5. The repository now has a current-state [backup, restore, and key-rotation runbook](backup-restore-and-key-rotation.md), but restore drills, backup scheduling, and encrypted-store key rotation remain manual operator work.
