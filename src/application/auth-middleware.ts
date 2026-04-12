@@ -1,11 +1,11 @@
 import { timingSafeEqual } from "node:crypto";
 import type { NextFunction, Request, Response } from "express";
 import type { RequestPrincipal } from "../domain/anamnesis";
-import { verifyJwt, JwtVerificationError, type JwtVerifyOptions } from "../core/jwt-verification";
+import { verifyJwtAsync, JwtVerificationError, type AsyncJwtVerifyOptions } from "../core/jwt-verification";
 
 export interface AuthMiddlewareOptions {
   apiKey?: string;
-  jwt?: JwtVerifyOptions;
+  jwt?: AsyncJwtVerifyOptions;
   skipPaths?: Set<string>;
 }
 
@@ -29,7 +29,7 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
   const { apiKey, jwt: jwtOptions, skipPaths } = options;
   const expectedBuffer = apiKey ? Buffer.from(apiKey, "utf8") : undefined;
 
-  return function authMiddleware(request: Request, response: Response, next: NextFunction) {
+  return async function authMiddleware(request: Request, response: Response, next: NextFunction) {
     if (skipPaths?.has(request.path)) {
       next();
       return;
@@ -49,7 +49,7 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
 
     if (jwtOptions && token.includes(".")) {
       try {
-        const payload = verifyJwt(token, jwtOptions);
+        const payload = await verifyJwtAsync(token, jwtOptions);
         request.principal = extractPrincipalFromJwt(payload);
         next();
         return;

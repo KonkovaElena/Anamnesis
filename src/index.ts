@@ -35,6 +35,7 @@ async function main() {
   const jwtSecret = process.env.JWT_SECRET?.trim() || undefined;
   const jwtPublicKey = process.env.JWT_PUBLIC_KEY?.replace(/\\n/g, "\n").trim() || undefined;
   const jwtJwks = parseJwtJwksEnv(process.env.JWT_JWKS);
+  const jwtJwksUrl = process.env.JWT_JWKS_URL?.trim() || undefined;
   const jwtIssuer = process.env.JWT_ISSUER?.trim() || undefined;
   const jwtAudience = process.env.JWT_AUDIENCE?.trim() || undefined;
   const jwtTyp = process.env.JWT_TYP?.trim() || undefined;
@@ -48,9 +49,9 @@ async function main() {
     .map((value) => value.trim().toLowerCase())
     .filter((value) => value.length > 0);
 
-  if (!apiKey && !jwtSecret && !jwtPublicKey && !jwtJwks && allowInsecureDevAuth) {
+  if (!apiKey && !jwtSecret && !jwtPublicKey && !jwtJwks && !jwtJwksUrl && allowInsecureDevAuth) {
     process.stdout.write(
-      "[WARN] API_KEY, JWT_SECRET, JWT_PUBLIC_KEY, and JWT_JWKS are not set — unauthenticated access is enabled only because ALLOW_INSECURE_DEV_AUTH=true was explicitly configured.\n",
+      "[WARN] API_KEY, JWT_SECRET, JWT_PUBLIC_KEY, JWT_JWKS, and JWT_JWKS_URL are not set — unauthenticated access is enabled only because ALLOW_INSECURE_DEV_AUTH=true was explicitly configured.\n",
     );
   }
 
@@ -64,6 +65,7 @@ async function main() {
     jwtSecret,
     jwtPublicKey,
     jwtJwks,
+    jwtJwksUrl,
     jwtIssuer,
     jwtAudience,
     jwtTyp,

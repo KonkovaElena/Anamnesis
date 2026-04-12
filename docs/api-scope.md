@@ -19,12 +19,12 @@ This is an organizational workflow API, not a diagnostic or treatment API.
 ## Authentication Model
 
 - Application endpoints use `Authorization: Bearer <API_KEY>` when `API_KEY` is configured.
-- Application endpoints also accept `Authorization: Bearer <JWT>` when `JWT_SECRET`, `JWT_PUBLIC_KEY`, or `JWT_JWKS` is configured.
-- `JWT_SECRET`, `JWT_PUBLIC_KEY`, and `JWT_JWKS` are mutually exclusive JWT verifier modes.
+- Application endpoints also accept `Authorization: Bearer <JWT>` when `JWT_SECRET`, `JWT_PUBLIC_KEY`, `JWT_JWKS`, or `JWT_JWKS_URL` is configured.
+- `JWT_SECRET`, `JWT_PUBLIC_KEY`, `JWT_JWKS`, and `JWT_JWKS_URL` are mutually exclusive JWT verifier modes.
 - When `API_KEY` and one JWT verifier mode are configured, either bearer mechanism may be used.
 - JWT bearer validation requires a non-empty `sub`, enforces configured `JWT_ISSUER` and `JWT_AUDIENCE` when present, rejects malformed `roles`, and honors `nbf` in addition to `iat`/`exp`.
 - When `JWT_TYP` is configured, JWTs must also carry a matching JOSE `typ` value.
-- Startup without `API_KEY`, `JWT_SECRET`, `JWT_PUBLIC_KEY`, or `JWT_JWKS` is rejected unless `ALLOW_INSECURE_DEV_AUTH=true` is explicitly set.
+- Startup without `API_KEY`, `JWT_SECRET`, `JWT_PUBLIC_KEY`, `JWT_JWKS`, or `JWT_JWKS_URL` is rejected unless `ALLOW_INSECURE_DEV_AUTH=true` is explicitly set.
 - `ALLOW_INSECURE_DEV_AUTH=true` is rejected when `NODE_ENV=production`.
 - `GET /healthz`, `GET /readyz`, and `GET /metrics` remain unauthenticated even when bearer auth is enabled.
 - Under JWT bearer auth, the packet workflow treats the authenticated JWT `sub` as the trusted workflow actor for `requestedBy`, `reviewerName`, and `finalizedBy` rather than trusting arbitrary body strings.
@@ -39,7 +39,8 @@ This is an organizational workflow API, not a diagnostic or treatment API.
 - `JWT_SECRET` enables HS256 bearer-token verification.
 - `JWT_PUBLIC_KEY` enables RS256 bearer-token verification with one PEM-encoded RSA public key.
 - `JWT_JWKS` enables RS256 bearer-token verification through a local JSON JWK Set with `kid`-aware key selection and staged overlap windows during restart-time key rotation.
-- `JWT_ISSUER` and `JWT_AUDIENCE` narrow acceptance to the intended issuer and recipient.
+- `JWT_JWKS_URL` enables RS256 bearer-token verification through an issuer-bound remote JWKS fetched over `https`, cached using `Cache-Control` or `Expires`, revalidated with `ETag` and `Last-Modified` when stale, and refreshed immediately when a token references an unseen `kid`.
+- `JWT_ISSUER` and `JWT_AUDIENCE` narrow acceptance to the intended issuer and recipient. `JWT_ISSUER` becomes required and must be an absolute `https` issuer URL on the same origin as `JWT_JWKS_URL` when remote JWKS mode is enabled.
 - `JWT_TYP` is optional and, when configured, requires a matching JOSE `typ` value such as `anamnesis+jwt`.
 - In `NODE_ENV=production`, weak JWT shared secrets are rejected at bootstrap; the current code requires at least 32 bytes of secret material.
 - Weak RS256 verification keys are also rejected at bootstrap; the current code requires an RSA public key with modulus length >= 2048 bits.

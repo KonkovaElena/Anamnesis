@@ -24,7 +24,7 @@ This page is implementation-grounded. It does not claim security controls that a
 
 | Threat surface | Current control | Current repo anchor | Residual note |
 | --- | --- | --- | --- |
-| Unauthenticated application access | Bearer token auth on application routes when `API_KEY`, `JWT_SECRET`, `JWT_PUBLIC_KEY`, or `JWT_JWKS` is set | `src/application/auth-middleware.ts`, `src/bootstrap.ts`, `src/core/jwt-verification.ts` | API-key path remains shared-secret and operator-wide; JWT path can verify HS256 shared-secret tokens, RS256 public-key tokens, or RS256 tokens selected from a local JWKS by `kid`, is subject-bound, owner-scopes newly created cases, supports explicit grant and revoke sharing to named principals, keeps destructive case-admin actions owner-or-operator only, validates `sub`/`nbf`/configured `iss`/`aud`/optional `typ`, and applies packet-route role gates, but it is still not a full tenant/RBAC system |
+| Unauthenticated application access | Bearer token auth on application routes when `API_KEY`, `JWT_SECRET`, `JWT_PUBLIC_KEY`, `JWT_JWKS`, or `JWT_JWKS_URL` is set | `src/application/auth-middleware.ts`, `src/bootstrap.ts`, `src/core/jwt-verification.ts`, `src/infrastructure/RemoteJwtJwksProvider.ts` | API-key path remains shared-secret and operator-wide; JWT path can verify HS256 shared-secret tokens, RS256 public-key tokens, RS256 tokens selected from a local JWKS by `kid`, or RS256 tokens validated against an issuer-bound remote JWKS with cache-aware refresh, is subject-bound, owner-scopes newly created cases, supports explicit grant and revoke sharing to named principals, keeps destructive case-admin actions owner-or-operator only, validates `sub`/`nbf`/configured `iss`/`aud`/optional `typ`, and applies packet-route role gates, but it is still not a full tenant/RBAC system |
 | Silent fail-open startup | Secure-by-default bootstrap policy; unauthenticated startup now requires explicit `ALLOW_INSECURE_DEV_AUTH=true` and is blocked in production mode | `src/bootstrap.ts`, `src/index.ts` | Local-dev override still exists by design |
 | Brute-force or burst abuse | Per-IP sliding-window limiter via `RATE_LIMIT_RPM` with IPv4-mapped IPv6 normalization | `src/application/rate-limiter.ts`, `src/application/create-app.ts` | Disabled by default unless configured |
 | Header hardening | Helmet with CSP/HSTS/COOP/CORP/Referrer-Policy and related headers | `src/application/create-app.ts` | TLS termination is still deployment-side, not in-process |
@@ -36,8 +36,8 @@ This page is implementation-grounded. It does not claim security controls that a
 
 ## Auth Posture
 
-- Application routes rely on a bearer token shared through `API_KEY` and/or a JWT validated through either `JWT_SECRET` (HS256), `JWT_PUBLIC_KEY` (RS256 single key), or `JWT_JWKS` (RS256 local JWK Set).
-- `JWT_SECRET`, `JWT_PUBLIC_KEY`, and `JWT_JWKS` are mutually exclusive JWT verifier modes; bootstrap rejects ambiguous dual configuration.
+- Application routes rely on a bearer token shared through `API_KEY` and/or a JWT validated through either `JWT_SECRET` (HS256), `JWT_PUBLIC_KEY` (RS256 single key), `JWT_JWKS` (RS256 local JWK Set), or `JWT_JWKS_URL` (issuer-bound remote RS256 JWKS).
+- `JWT_SECRET`, `JWT_PUBLIC_KEY`, `JWT_JWKS`, and `JWT_JWKS_URL` are mutually exclusive JWT verifier modes; bootstrap rejects ambiguous dual configuration.
 - JWT validation now rejects missing subject, malformed role arrays, future `nbf`, issuer/audience mismatches, and optional JOSE `typ` mismatches when `JWT_TYP` is configured.
 - Health, readiness, and metrics probes intentionally remain unauthenticated.
 - Local development can opt into unauthenticated startup only through `ALLOW_INSECURE_DEV_AUTH=true`.
@@ -92,7 +92,7 @@ What is not yet true:
 ## Known Gaps
 
 1. TLS is expected to be handled by deployment infrastructure rather than by the Node process itself.
-2. The API-key path is still shared-secret based and operator-wide; the JWT path now supports HS256, RS256 single-key verification, and local JWKS-based `kid` rollover, plus owner-scoped case visibility, revocable sharing, subject-bound identity, and route-level role enforcement, but it is not a full tenant/RBAC system with fine-grained permission tiers.
+2. The API-key path is still shared-secret based and operator-wide; the JWT path now supports HS256, RS256 single-key verification, local JWKS-based `kid` rollover, and issuer-bound remote JWKS refresh, plus owner-scoped case visibility, revocable sharing, subject-bound identity, and route-level role enforcement, but it is not a full tenant/RBAC system with fine-grained permission tiers.
 3. There is no central secret manager integration or automated key rotation workflow in this repository. See [crypto-agility-inventory.md](crypto-agility-inventory.md) for the migration plan.
 4. The audit trail is append-only in software terms, but not cryptographically sealed.
 5. The repository now has a current-state [backup, restore, and key-rotation runbook](backup-restore-and-key-rotation.md), but restore drills, backup scheduling, and encrypted-store key rotation remain manual operator work.
@@ -104,7 +104,7 @@ What is not yet true:
 Minimum recommended deployment posture for the current slice:
 
 1. Set `API_KEY` and keep `ALLOW_INSECURE_DEV_AUTH` unset.
-	If an external issuer already exists, prefer `JWT_JWKS` for restart-time overlap windows; otherwise prefer `JWT_PUBLIC_KEY` over `JWT_SECRET` so the standalone verifies signatures without sharing the issuer's signing secret.
+	If an external issuer already exists, prefer `JWT_JWKS_URL` for issuer-bound remote rollover and cache-aware refresh; if you need a purely local verifier artifact with restart-time overlap windows, prefer `JWT_JWKS`; otherwise prefer `JWT_PUBLIC_KEY` over `JWT_SECRET` so the standalone verifies signatures without sharing the issuer's signing secret.
 2. Run behind TLS termination.
 3. Set `RATE_LIMIT_RPM` to a non-zero value.
 4. Set `STORE_PATH` and `ENCRYPTION_KEY` together for durable encrypted storage.

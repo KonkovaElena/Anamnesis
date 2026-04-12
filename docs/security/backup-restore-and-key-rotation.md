@@ -27,14 +27,14 @@ This runbook covers:
 
 - the SQLite case store behind `STORE_PATH`;
 - the AES-256-GCM store key provided through `ENCRYPTION_KEY`;
-- application auth material provided through `API_KEY`, `JWT_SECRET`, `JWT_PUBLIC_KEY`, or `JWT_JWKS`;
+- application auth material provided through `API_KEY`, `JWT_SECRET`, `JWT_PUBLIC_KEY`, `JWT_JWKS`, or `JWT_JWKS_URL`;
 - the current manual restore and restart workflow.
 
 This runbook does not claim:
 
 - automated backup scheduling;
 - in-place encrypted-store key rotation;
-- HTTPS-fetched JWKS or automated issuer-bound JWT rollover;
+- fully automated issuer metadata discovery or background JWKS rotation orchestration;
 - detached audit export or external notarization;
 - full disaster-recovery orchestration.
 
@@ -48,6 +48,7 @@ This runbook does not claim:
 | Restart-time `JWT_SECRET` replacement | Yes | Requires coordinated issuer and verifier cutover. |
 | Restart-time `JWT_PUBLIC_KEY` replacement | Yes | Single-key verifier only; use `JWT_JWKS` when an overlap window is required. |
 | Restart-time `JWT_JWKS` replacement | Yes | Supports local `kid`-aware overlap windows when old and new keys coexist in the configured JWKS during restart-time rotation. |
+| `JWT_JWKS_URL` remote JWKS refresh | Yes | Requires `JWT_ISSUER` plus an issuer-bound `https` JWKS URL; freshness follows `Cache-Control` or `Expires`, stale entries revalidate with `ETag` and `Last-Modified`, and unseen `kid` values force an immediate refresh. |
 | In-place `ENCRYPTION_KEY` rotation for existing data | No | Repository does not ship multi-key decrypt or re-encryption tooling. |
 | Automatic backup verification and restore drill scheduling | No | Must be performed operationally outside the repository. |
 
@@ -177,7 +178,19 @@ Current rotation model:
 4. after issuer cutover, remove the retired key from `JWT_JWKS` and restart again;
 5. verify tokens signed under the retired `kid` now fail.
 
-The current repository accepts a local JSON JWK Set only. There is no built-in HTTPS JWKS fetch, cache validation, or automatic refresh.
+The current repository accepts a local JSON JWK Set in this mode only. HTTPS JWKS fetch, cache validation, and on-demand refresh belong to `JWT_JWKS_URL`, not `JWT_JWKS`.
+
+### `JWT_JWKS_URL`
+
+Current rotation model:
+
+1. publish replacement signing keys at the issuer's JWKS endpoint with a distinct `kid` while the retiring key is still present;
+2. keep `JWT_ISSUER` and `JWT_JWKS_URL` pointed at the issuer-controlled `https` endpoints on the same origin;
+3. verify tokens signed under both the retiring and replacement `kid` succeed during the intended overlap window;
+4. after issuer cutover, remove the retired key from the issuer JWKS document;
+5. verify tokens signed under the retired `kid` now fail after cache refresh or forced refresh-on-kid-miss.
+
+The current repository performs bounded `https` JWKS fetches, uses `Cache-Control` or `Expires` to decide freshness, revalidates stale entries with `ETag` and `Last-Modified`, and forces a refresh when an otherwise-valid token references an unseen `kid`. It does not run background refresh workers or publish issuer metadata discovery logic.
 
 ### `ENCRYPTION_KEY`
 

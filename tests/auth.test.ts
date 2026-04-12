@@ -178,6 +178,52 @@ test("bootstrap rejects mixed JWT public key and JWKS configuration", () => {
   );
 });
 
+test("bootstrap rejects remote JWKS mode when JWT_ISSUER is not configured", () => {
+  assert.throws(
+    () =>
+      bootstrap({
+        jwtJwksUrl: "https://issuer.example.test/.well-known/jwks.json",
+      }),
+    /JWT_ISSUER|issuer/i,
+  );
+});
+
+test("bootstrap rejects non-HTTPS remote JWKS URLs", () => {
+  assert.throws(
+    () =>
+      bootstrap({
+        jwtIssuer: "https://issuer.example.test",
+        jwtJwksUrl: "http://issuer.example.test/.well-known/jwks.json",
+      }),
+    /https/i,
+  );
+});
+
+test("bootstrap rejects mixed local JWKS and remote JWKS URL configuration", () => {
+  const { publicKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: "spki", format: "pem" },
+    privateKeyEncoding: { type: "pkcs8", format: "pem" },
+  });
+
+  assert.throws(
+    () =>
+      bootstrap({
+        jwtIssuer: "https://issuer.example.test",
+        jwtJwksUrl: "https://issuer.example.test/.well-known/jwks.json",
+        jwtJwks: {
+          keys: [{
+            ...(createPublicKey(publicKey).export({ format: "jwk" }) as JsonWebKey),
+            alg: "RS256",
+            use: "sig",
+            kid: "rotation-primary",
+          }],
+        },
+      }),
+    /JWT_JWKS.*JWT_JWKS_URL|JWT_JWKS_URL.*JWT_JWKS/i,
+  );
+});
+
 test("bootstrap rejects weak JWT public key", () => {
   const { publicKey } = generateKeyPairSync("rsa", {
     modulusLength: 1024,

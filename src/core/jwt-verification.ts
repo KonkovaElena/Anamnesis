@@ -47,7 +47,19 @@ export interface JwtRsaJwksVerifyOptions extends JwtVerifyCommonOptions {
   secret?: never;
 }
 
+export interface JwtRemoteJwksResolver {
+  getJwks(options?: { requiredKid?: string }): Promise<JwtJwkSet>;
+}
+
+export interface JwtRemoteJwksVerifyOptions extends JwtVerifyCommonOptions {
+  jwksResolver: JwtRemoteJwksResolver;
+  jwks?: never;
+  publicKeyPem?: never;
+  secret?: never;
+}
+
 export type JwtVerifyOptions = JwtHmacVerifyOptions | JwtRsaVerifyOptions | JwtRsaJwksVerifyOptions;
+export type AsyncJwtVerifyOptions = JwtVerifyOptions | JwtRemoteJwksVerifyOptions;
 
 const jwtPublicKeyCache = new Map<string, KeyObject>();
 const jwtJwkKeyCache = new Map<string, KeyObject>();
@@ -77,6 +89,10 @@ function isHmacVerifyOptions(options: JwtVerifyOptions): options is JwtHmacVerif
 
 function isJwksVerifyOptions(options: JwtVerifyOptions): options is JwtRsaJwksVerifyOptions {
   return Array.isArray((options as JwtRsaJwksVerifyOptions).jwks?.keys);
+}
+
+function isRemoteJwksVerifyOptions(options: AsyncJwtVerifyOptions): options is JwtRemoteJwksVerifyOptions {
+  return typeof (options as JwtRemoteJwksVerifyOptions).jwksResolver?.getJwks === "function";
 }
 
 function getSupportedAlgorithms(options: JwtVerifyOptions): string[] {
@@ -399,4 +415,34 @@ export function verifyJwt(token: string, options: JwtVerifyOptions): JwtPayload 
   }
 
   return payload;
+}
+
+export async function verifyJwtAsync(token: string, options: AsyncJwtVerifyOptions): Promise<JwtPayload> {
+  if (!isRemoteJwksVerifyOptions(options)) {
+    return verifyJwt(token, options);
+  }
+
+  const parts = token.split(".");
+  if (parts.length !== 3) {
+    throw new JwtVerificationError("malformed_token", "JWT must have three parts.");
+  }
+
+  const [headerB64] = parts as [string, string, string];
+
+  let header: { kid?: string };
+  try {
+    header = JSON.parse(base64UrlDecode(headerB64).toString("utf8"));
+  } catch {
+    throw new JwtVerificationError("malformed_header", "JWT header is not valid JSON.");
+  }
+
+  const jwks = await options.jwksResolver.getJwks({ requiredKid: normalizeKeyId(header.kid) });
+
+  return verifyJwt(token, {
+    jwks,
+    issuer: options.issuer,
+    audience: options.audience,
+    clockToleranceSec: options.clockToleranceSec,
+    expectedTyp: options.expectedTyp,
+  });
 }

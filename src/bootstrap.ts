@@ -8,6 +8,7 @@ import { InMemoryAuditTrailStore } from "./infrastructure/InMemoryAuditTrailStor
 import { parseEncryptionKey } from "./infrastructure/encryption";
 import { HttpExternalAttachmentFetcher } from "./infrastructure/HttpExternalAttachmentFetcher";
 import { NoOpLlmSidecar } from "./infrastructure/NoOpLlmSidecar";
+import { assertRemoteJwtJwksConfiguration, RemoteJwtJwksProvider } from "./infrastructure/RemoteJwtJwksProvider";
 import { SqliteAuditTrailStore } from "./infrastructure/SqliteAuditTrailStore";
 import { SqliteAnamnesisStore } from "./infrastructure/SqliteAnamnesisStore";
 import type { LlmSidecar } from "./domain/anamnesis";
@@ -18,6 +19,7 @@ export interface BootstrapOptions {
   jwtSecret?: string;
   jwtPublicKey?: string;
   jwtJwks?: JwtJwkSet;
+  jwtJwksUrl?: string;
   jwtIssuer?: string;
   jwtAudience?: string;
   jwtTyp?: string;
@@ -29,6 +31,8 @@ export interface BootstrapOptions {
   externalAttachmentFetcher?: ExternalAttachmentFetcher;
   externalAttachmentAllowedHosts?: string[];
   llmSidecar?: LlmSidecar;
+  jwtJwksFetchImplementation?: typeof fetch;
+  jwtJwksNow?: () => number;
 }
 
 function assertProductionJwtSecretStrength(jwtSecret: string | undefined, nodeEnv: string | undefined): void {
@@ -46,6 +50,7 @@ function assertJwtVerificationConfiguration(options: BootstrapOptions, nodeEnv: 
     options.jwtSecret ? "JWT_SECRET" : undefined,
     options.jwtPublicKey ? "JWT_PUBLIC_KEY" : undefined,
     options.jwtJwks ? "JWT_JWKS" : undefined,
+    options.jwtJwksUrl ? "JWT_JWKS_URL" : undefined,
   ].filter((entry): entry is string => entry !== undefined);
 
   if (configuredSources.length > 1) {
@@ -61,6 +66,10 @@ function assertJwtVerificationConfiguration(options: BootstrapOptions, nodeEnv: 
   if (options.jwtJwks) {
     assertJwtJwksStrength(options.jwtJwks);
   }
+
+  if (options.jwtJwksUrl) {
+    assertRemoteJwtJwksConfiguration(options.jwtIssuer, options.jwtJwksUrl);
+  }
 }
 
 export function bootstrap(options?: BootstrapOptions) {
@@ -72,10 +81,10 @@ export function bootstrap(options?: BootstrapOptions) {
 
   assertJwtVerificationConfiguration(options ?? {}, normalizedNodeEnv);
 
-  if (!options?.apiKey && !options?.jwtSecret && !options?.jwtPublicKey && !options?.jwtJwks) {
+  if (!options?.apiKey && !options?.jwtSecret && !options?.jwtPublicKey && !options?.jwtJwks && !options?.jwtJwksUrl) {
     if (!allowInsecureDevAuth) {
       throw new Error(
-        "API_KEY, JWT_SECRET, JWT_PUBLIC_KEY, or JWT_JWKS is required unless ALLOW_INSECURE_DEV_AUTH=true is explicitly enabled for local development.",
+        "API_KEY, JWT_SECRET, JWT_PUBLIC_KEY, JWT_JWKS, or JWT_JWKS_URL is required unless ALLOW_INSECURE_DEV_AUTH=true is explicitly enabled for local development.",
       );
     }
 
@@ -90,6 +99,14 @@ export function bootstrap(options?: BootstrapOptions) {
   const externalAttachmentFetcher = options?.externalAttachmentFetcher
     ?? httpExternalAttachmentFetcher.fetchAttachment.bind(httpExternalAttachmentFetcher);
   const llmSidecar = options?.llmSidecar ?? new NoOpLlmSidecar();
+  const remoteJwtJwksProvider = options?.jwtJwksUrl
+    ? new RemoteJwtJwksProvider({
+        issuer: options.jwtIssuer!,
+        jwksUrl: options.jwtJwksUrl,
+        fetchImplementation: options.jwtJwksFetchImplementation,
+        now: options.jwtJwksNow,
+      })
+    : undefined;
 
   if (options?.storePath) {
     if (!options.encryptionKey) {
@@ -110,7 +127,7 @@ export function bootstrap(options?: BootstrapOptions) {
   }
 
   let authMiddleware: ((req: Request, res: Response, next: NextFunction) => void) | undefined;
-  if (options?.apiKey || options?.jwtSecret || options?.jwtPublicKey || options?.jwtJwks) {
+  if (options?.apiKey || options?.jwtSecret || options?.jwtPublicKey || options?.jwtJwks || options?.jwtJwksUrl) {
     authMiddleware = createAuthMiddleware({
       apiKey: options?.apiKey,
       jwt: options?.jwtSecret
@@ -134,6 +151,13 @@ export function bootstrap(options?: BootstrapOptions) {
                 audience: options.jwtAudience,
                 expectedTyp: options.jwtTyp,
               }
+            : remoteJwtJwksProvider
+              ? {
+                  jwksResolver: remoteJwtJwksProvider,
+                  issuer: options.jwtIssuer,
+                  audience: options.jwtAudience,
+                  expectedTyp: options.jwtTyp,
+                }
         : undefined,
       skipPaths: new Set(["/healthz", "/readyz", "/metrics"]),
     });

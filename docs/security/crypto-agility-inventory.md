@@ -110,10 +110,10 @@ This is not planned for the current release but is documented here so the future
 
 ### Phase E: Asymmetric JWT Key Rotation
 
-The current asymmetric auth posture uses either a static `JWT_PUBLIC_KEY` verifier input or a local `JWT_JWKS` verifier input. The repository already supports `kid`-aware key selection across a local JWKS, which enables manual overlap windows during restart-time rollover. A stronger operator model should move next toward issuer-bound key rollover:
+The current asymmetric auth posture now supports a static `JWT_PUBLIC_KEY` verifier input, a local `JWT_JWKS` verifier input, or an issuer-bound remote `JWT_JWKS_URL` verifier input. The repository supports `kid`-aware key selection across both local and remote JWKS material, bounded remote `https` fetch, cache-control-aware freshness, `ETag` or `Last-Modified` revalidation, and refresh-on-kid-miss. Remaining operator improvements still point toward stronger issuer automation:
 
-1. support HTTPS-retrieved JWK or JWKS documents with issuer binding and cache control;
-2. allow automatic refresh and retirement of signing keys rather than restart-time local JSON replacement;
+1. allow richer automatic retirement policies and issuer metadata discovery instead of only on-demand JWKS refresh;
+2. surface operator-facing observability for remote verifier freshness and refresh failures;
 3. prefer algorithms with a clearer forward migration path once interoperability permits.
 
 ## Constant-Time Comparison Note

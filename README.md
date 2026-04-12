@@ -26,7 +26,7 @@ Anamnesis is designed as a narrow standalone slice for healthcare-adjacent workf
 - explicit clinician review ledger (`approved`, `changes_requested`, `rejected`);
 - packet finalization only for clinician-approved, non-stale drafts;
 - append-only audit trail and operations summary;
-- Bearer-token authentication via API key, HS256 shared secret, RS256 PEM public key, or kid-aware local JWKS; rate limiting, security headers, and graceful shutdown;
+- Bearer-token authentication via API key, HS256 shared secret, RS256 PEM public key, local kid-aware JWKS, or issuer-bound remote JWKS with cache-aware refresh; rate limiting, security headers, and graceful shutdown;
 - durable SQLite persistence with AES-256-GCM encryption at rest.
 
 ## What This Repository Explicitly Does Not Claim
@@ -142,7 +142,7 @@ npm run validate:public-export
 npm run dev
 ```
 
-Set one of `API_KEY`, `JWT_SECRET`, `JWT_PUBLIC_KEY`, or `JWT_JWKS` before starting the server unless `ALLOW_INSECURE_DEV_AUTH=true` is explicitly enabled for local development.
+Set one of `API_KEY`, `JWT_SECRET`, `JWT_PUBLIC_KEY`, `JWT_JWKS`, or `JWT_JWKS_URL` before starting the server unless `ALLOW_INSECURE_DEV_AUTH=true` is explicitly enabled for local development.
 
 Default runtime port: `4020`
 
@@ -196,13 +196,14 @@ The image uses Node 24 Alpine, runs as a non-root user, and includes a built-in 
 |---|---|---|---|
 | `PORT` | No | `4020` | HTTP listen port |
 | `API_KEY` | One auth mechanism is required unless explicit local-dev override is enabled | — | Opaque bearer token for application endpoints |
-| `JWT_SECRET` | No | — | HS256 verifier secret for JWT bearer authentication; mutually exclusive with `JWT_PUBLIC_KEY` and `JWT_JWKS` |
-| `JWT_PUBLIC_KEY` | No | — | PEM-encoded RSA public key for RS256 JWT verification with one active verifier key; mutually exclusive with `JWT_SECRET` and `JWT_JWKS` |
-| `JWT_JWKS` | No | — | JSON JWK Set for RS256 JWT verification with local, `kid`-aware key selection and staged overlap during restart-time key rotation; mutually exclusive with `JWT_SECRET` and `JWT_PUBLIC_KEY` |
-| `JWT_ISSUER` | No | — | Optional JWT issuer constraint |
+| `JWT_SECRET` | No | — | HS256 verifier secret for JWT bearer authentication; mutually exclusive with `JWT_PUBLIC_KEY`, `JWT_JWKS`, and `JWT_JWKS_URL` |
+| `JWT_PUBLIC_KEY` | No | — | PEM-encoded RSA public key for RS256 JWT verification with one active verifier key; mutually exclusive with `JWT_SECRET`, `JWT_JWKS`, and `JWT_JWKS_URL` |
+| `JWT_JWKS` | No | — | JSON JWK Set for RS256 JWT verification with local, `kid`-aware key selection and staged overlap during restart-time key rotation; mutually exclusive with `JWT_SECRET`, `JWT_PUBLIC_KEY`, and `JWT_JWKS_URL` |
+| `JWT_JWKS_URL` | No | — | HTTPS URL for issuer-bound remote RS256 JWKS retrieval with Cache-Control or Expires freshness, `ETag`/`Last-Modified` revalidation, and forced refresh when an otherwise-valid token references an unseen `kid`; mutually exclusive with `JWT_SECRET`, `JWT_PUBLIC_KEY`, and `JWT_JWKS` |
+| `JWT_ISSUER` | No | — | Optional JWT issuer constraint for local modes; required and must be an absolute `https` issuer URL on the same origin as `JWT_JWKS_URL` in remote JWKS mode |
 | `JWT_AUDIENCE` | No | — | Optional JWT audience constraint |
 | `JWT_TYP` | No | — | Optional JOSE `typ` value that JWTs must match |
-| `ALLOW_INSECURE_DEV_AUTH` | No | `false` | Explicit local-development override that allows startup without `API_KEY`, `JWT_SECRET`, `JWT_PUBLIC_KEY`, or `JWT_JWKS`; rejected when `NODE_ENV=production` |
+| `ALLOW_INSECURE_DEV_AUTH` | No | `false` | Explicit local-development override that allows startup without `API_KEY`, `JWT_SECRET`, `JWT_PUBLIC_KEY`, `JWT_JWKS`, or `JWT_JWKS_URL`; rejected when `NODE_ENV=production` |
 | `RATE_LIMIT_RPM` | No | `0` | Maximum requests per minute per IP; health and readiness probes are exempt |
 | `EXTERNAL_ATTACHMENT_HOST_ALLOWLIST` | No | — | Optional comma-separated hostname allowlist for external FHIR bundle attachment fetches |
 | `STORE_PATH` | No | — | Path to SQLite database file; when unset, data is stored in memory only |
