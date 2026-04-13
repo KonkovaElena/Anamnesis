@@ -1,4 +1,10 @@
-import type { LlmDraftAssistanceInput, LlmDraftAssistanceResult, LlmSidecar } from "../domain/anamnesis";
+import type {
+  LlmDraftAssistanceInput,
+  LlmDraftAssistanceResult,
+  LlmSidecar,
+  LlmSidecarObservabilityReader,
+  LlmSidecarObservabilitySnapshot,
+} from "../domain/anamnesis";
 
 const DEFAULT_TIMEOUT_MS = 5_000;
 const DEFAULT_DISCLAIMER = "Model-generated draft assistance requires clinician verification.";
@@ -117,7 +123,7 @@ function toUsageNumber(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
-export class OpenAiCompatibleLlmSidecar implements LlmSidecar {
+export class OpenAiCompatibleLlmSidecar implements LlmSidecar, LlmSidecarObservabilityReader {
   private readonly baseUrl: string;
 
   private readonly model: string;
@@ -127,6 +133,16 @@ export class OpenAiCompatibleLlmSidecar implements LlmSidecar {
   private readonly timeoutMs: number;
 
   private readonly fetchImplementation: typeof fetch;
+
+  private totalRequests = 0;
+
+  private totalSuccesses = 0;
+
+  private totalFailures = 0;
+
+  private lastSuccessfulRequestAt: string | null = null;
+
+  private lastFailedRequestAt: string | null = null;
 
   constructor(options: OpenAiCompatibleLlmSidecarOptions) {
     const model = options.model.trim();
@@ -149,6 +165,18 @@ export class OpenAiCompatibleLlmSidecar implements LlmSidecar {
     return true;
   }
 
+  getObservabilitySnapshot(): LlmSidecarObservabilitySnapshot {
+    return {
+      enabled: true,
+      configuredModel: this.model,
+      totalRequests: this.totalRequests,
+      totalSuccesses: this.totalSuccesses,
+      totalFailures: this.totalFailures,
+      lastSuccessfulRequestAt: this.lastSuccessfulRequestAt,
+      lastFailedRequestAt: this.lastFailedRequestAt,
+    };
+  }
+
   async assistDraft(input: LlmDraftAssistanceInput): Promise<LlmDraftAssistanceResult> {
     const endpoint = new URL("v1/chat/completions", this.baseUrl);
     const abortController = new AbortController();
@@ -164,6 +192,7 @@ export class OpenAiCompatibleLlmSidecar implements LlmSidecar {
     }
 
     try {
+      this.totalRequests += 1;
       const response = await this.fetchImplementation(endpoint.toString(), {
         method: "POST",
         signal: abortController.signal,
@@ -203,6 +232,9 @@ export class OpenAiCompatibleLlmSidecar implements LlmSidecar {
         throw new Error("LLM sidecar did not return assistant text.");
       }
 
+      this.totalSuccesses += 1;
+      this.lastSuccessfulRequestAt = new Date().toISOString();
+
       return {
         model: payload.model ?? this.model,
         promptTokens: toUsageNumber(payload.usage?.prompt_tokens),
@@ -217,6 +249,9 @@ export class OpenAiCompatibleLlmSidecar implements LlmSidecar {
         ],
       };
     } catch (error: unknown) {
+      this.totalFailures += 1;
+      this.lastFailedRequestAt = new Date().toISOString();
+
       if (error instanceof Error && error.name === "AbortError") {
         throw new Error(`LLM sidecar request timed out after ${this.timeoutMs}ms.`, { cause: error });
       }

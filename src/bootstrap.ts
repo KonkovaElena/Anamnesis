@@ -2,7 +2,12 @@ import { type NextFunction, type Request, type Response } from "express";
 import { createAuthMiddleware } from "./application/auth-middleware";
 import { createApp } from "./application/create-app";
 import { assertJwtJwksStrength, assertJwtPublicKeyStrength, type JwtJwkSet } from "./core/jwt-verification";
-import type { AuditTrailStore, ExternalAttachmentFetcher, AnamnesisStore } from "./domain/anamnesis";
+import type {
+  AuditTrailStore,
+  ExternalAttachmentFetcher,
+  AnamnesisStore,
+  LlmSidecarObservabilityReader,
+} from "./domain/anamnesis";
 import { InMemoryAnamnesisStore } from "./infrastructure/InMemoryAnamnesisStore";
 import { InMemoryAuditTrailStore } from "./infrastructure/InMemoryAuditTrailStore";
 import { parseEncryptionKey } from "./infrastructure/encryption";
@@ -70,6 +75,10 @@ function createConfiguredLlmSidecar(options: BootstrapOptions | undefined): LlmS
   }
 
   return new NoOpLlmSidecar();
+}
+
+function isLlmSidecarObservabilityReader(value: LlmSidecar): value is LlmSidecar & LlmSidecarObservabilityReader {
+  return typeof (value as Partial<LlmSidecarObservabilityReader>).getObservabilitySnapshot === "function";
 }
 
 function assertProductionJwtSecretStrength(jwtSecret: string | undefined, nodeEnv: string | undefined): void {
@@ -209,6 +218,7 @@ export function bootstrap(options?: BootstrapOptions) {
     rateLimitRpm: options?.rateLimitRpm,
     externalAttachmentFetcher,
     llmSidecar,
+    llmSidecarTelemetry: isLlmSidecarObservabilityReader(llmSidecar) ? llmSidecar : undefined,
     remoteJwtJwksTelemetry: remoteJwtJwksProvider,
   });
 

@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import test from "node:test";
 import type { LlmDraftAssistanceInput, LlmDraftAssistanceResult, LlmSidecar } from "../src/domain/anamnesis";
-import { jsonRequest, withServer } from "./helpers";
+import { jsonRequest, textRequest, withServer } from "./helpers";
 
 class AvailableSidecar implements LlmSidecar {
   public assistCalls = 0;
@@ -275,6 +275,34 @@ test("bootstrap-configured OpenAI-compatible LLM sidecar enriches physician pack
       const draftedEvent = auditResponse.body.events.find((event) => event.eventType === "packet.drafted");
       assert.equal(draftedEvent?.details?.llmDraftAssistanceModel, "runtime-local-sidecar");
       assert.equal(draftedEvent?.details?.llmDraftAssistancePromptTokens, 155);
+
+      const summaryResponse = await jsonRequest<{
+        llmSidecar: {
+          enabled: boolean;
+          configuredModel: string | null;
+          totalRequests: number;
+          totalSuccesses: number;
+          totalFailures: number;
+          lastSuccessfulRequestAt: string | null;
+          lastFailedRequestAt: string | null;
+        };
+      }>(baseUrl, "/api/operations/summary");
+
+      assert.equal(summaryResponse.status, 200);
+      assert.equal(summaryResponse.body.llmSidecar.enabled, true);
+      assert.equal(summaryResponse.body.llmSidecar.configuredModel, "runtime-local-sidecar");
+      assert.equal(summaryResponse.body.llmSidecar.totalRequests, 1);
+      assert.equal(summaryResponse.body.llmSidecar.totalSuccesses, 1);
+      assert.equal(summaryResponse.body.llmSidecar.totalFailures, 0);
+      assert.equal(summaryResponse.body.llmSidecar.lastSuccessfulRequestAt !== null, true);
+      assert.equal(summaryResponse.body.llmSidecar.lastFailedRequestAt, null);
+
+      const metricsResponse = await textRequest(baseUrl, "/metrics");
+      assert.equal(metricsResponse.status, 200);
+      assert.match(metricsResponse.body, /anamnesis_llm_sidecar_enabled 1/);
+      assert.match(metricsResponse.body, /anamnesis_llm_sidecar_requests_total 1/);
+      assert.match(metricsResponse.body, /anamnesis_llm_sidecar_successes_total 1/);
+      assert.match(metricsResponse.body, /anamnesis_llm_sidecar_failures_total 0/);
     }, {
       llmSidecarBaseUrl: sidecarBaseUrl,
       llmSidecarModel: "runtime-local-sidecar",

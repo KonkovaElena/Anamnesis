@@ -10,6 +10,7 @@ import {
   type AuditTrailStore,
   type ExternalAttachmentFetcher,
   type LlmSidecar,
+  type LlmSidecarObservabilityReader,
 } from "../domain/anamnesis";
 import { registerCaseRoutes } from "./create-app/case-routes";
 import { registerIngestionRoutes } from "./create-app/ingestion-routes";
@@ -25,6 +26,7 @@ interface CreateAppDependencies {
   rateLimitRpm?: number;
   externalAttachmentFetcher?: ExternalAttachmentFetcher;
   llmSidecar?: LlmSidecar;
+  llmSidecarTelemetry?: LlmSidecarObservabilityReader;
   remoteJwtJwksTelemetry?: JwtRemoteJwksObservabilityReader;
 }
 
@@ -36,6 +38,7 @@ export function createApp({
   rateLimitRpm,
   externalAttachmentFetcher,
   llmSidecar,
+  llmSidecarTelemetry,
   remoteJwtJwksTelemetry,
 }: CreateAppDependencies) {
   const app = express();
@@ -82,6 +85,7 @@ export function createApp({
     externalAttachmentFetcher,
     isShuttingDown,
     llmSidecar,
+    llmSidecarTelemetry,
     remoteJwtJwksTelemetry,
   };
 

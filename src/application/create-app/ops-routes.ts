@@ -1,14 +1,21 @@
 import type { Express } from "express";
 import { verifyAuditChain } from "../../domain/anamnesis";
-import { loadOperationsSummary, readRemoteJwtJwksObservability, renderMetrics, type RouteDependencies } from "./shared";
+import {
+  loadOperationsSummary,
+  readLlmSidecarObservability,
+  readRemoteJwtJwksObservability,
+  renderMetrics,
+  type RouteDependencies,
+} from "./shared";
 
 export function registerOpsRoutes(
   app: Express,
-  { store, auditStore, isShuttingDown, remoteJwtJwksTelemetry }: RouteDependencies,
+  { store, auditStore, isShuttingDown, llmSidecarTelemetry, remoteJwtJwksTelemetry }: RouteDependencies,
 ): void {
   app.get("/api/operations/summary", async (request, response) => {
     response.json({
       summary: await loadOperationsSummary(store, auditStore, request.principal),
+      llmSidecar: readLlmSidecarObservability(llmSidecarTelemetry),
       remoteJwks: readRemoteJwtJwksObservability(remoteJwtJwksTelemetry),
     });
   });
@@ -28,7 +35,13 @@ export function registerOpsRoutes(
 
   app.get("/metrics", async (_request, response) => {
     const summary = await loadOperationsSummary(store, auditStore);
-    response.type("text/plain").send(renderMetrics(summary, readRemoteJwtJwksObservability(remoteJwtJwksTelemetry)));
+    response.type("text/plain").send(
+      renderMetrics(
+        summary,
+        readRemoteJwtJwksObservability(remoteJwtJwksTelemetry),
+        readLlmSidecarObservability(llmSidecarTelemetry),
+      ),
+    );
   });
 
   app.get("/api/audit-chain/verify", async (request, response) => {

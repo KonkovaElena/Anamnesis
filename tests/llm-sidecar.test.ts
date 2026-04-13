@@ -154,6 +154,15 @@ test("OpenAiCompatibleLlmSidecar posts a bounded chat-completions request and pa
     assert.match(result.sections[0]?.content ?? "", /confirm chronology/i);
     assert.match(result.disclaimer, /clinician verification/i);
     assert.ok(result.durationMs >= 0);
+
+    const snapshot = sidecar.getObservabilitySnapshot();
+    assert.equal(snapshot.enabled, true);
+    assert.equal(snapshot.configuredModel, "local-sidecar-model");
+    assert.equal(snapshot.totalRequests, 1);
+    assert.equal(snapshot.totalSuccesses, 1);
+    assert.equal(snapshot.totalFailures, 0);
+    assert.equal(snapshot.lastSuccessfulRequestAt !== null, true);
+    assert.equal(snapshot.lastFailedRequestAt, null);
   });
 });
 
@@ -199,6 +208,13 @@ test("OpenAiCompatibleLlmSidecar rejects empty assistant content", async () => {
       () => sidecar.assistDraft(SAMPLE_INPUT),
       (error: unknown) => error instanceof Error && error.message.includes("did not return assistant text"),
     );
+
+    const snapshot = sidecar.getObservabilitySnapshot();
+    assert.equal(snapshot.totalRequests, 1);
+    assert.equal(snapshot.totalSuccesses, 0);
+    assert.equal(snapshot.totalFailures, 1);
+    assert.equal(snapshot.lastSuccessfulRequestAt, null);
+    assert.equal(snapshot.lastFailedRequestAt !== null, true);
   } finally {
     server.close();
     await once(server, "close");

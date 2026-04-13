@@ -85,10 +85,10 @@ This is an organizational workflow API, not a diagnostic or treatment API.
 | `/api/cases/{caseId}/physician-packets/{packetId}/finalize` | `POST` | Finalize a clinician-approved, non-stale packet. Under JWT, `finalizedBy` is bound to the authenticated `sub`, and the principal must hold `clinician`. |
 | `/api/cases/{caseId}/audit-events` | `GET` | Return append-only audit events by `caseId`. |
 | `/api/audit-chain/verify` | `GET` | Recompute and verify the SHA-256 audit hash chain for one case via `caseId` query parameter. |
-| `/api/operations/summary` | `GET` | Return aggregate workflow counts for cases, artifacts, packets, reviews, finalized packets, and audit events. Under JWT bearer auth, counts are scoped to JWT-accessible cases and their audit history. When `JWT_JWKS_URL` is enabled, the payload also includes a `remoteJwks` snapshot with fetch, cache-hit, forced-refresh, failure, and freshness state. |
+| `/api/operations/summary` | `GET` | Return aggregate workflow counts for cases, artifacts, packets, reviews, finalized packets, and audit events. Under JWT bearer auth, counts are scoped to JWT-accessible cases and their audit history. When `JWT_JWKS_URL` is enabled, the payload also includes a `remoteJwks` snapshot with fetch, cache-hit, forced-refresh, failure, and freshness state. When a local `LlmSidecar` is configured, the payload also includes an `llmSidecar` snapshot with configured model, request, success, failure, and last-attempt timestamps. |
 | `/healthz` | `GET` | Liveness probe. |
 | `/readyz` | `GET` | Readiness probe; returns `503` during shutdown drain. |
-| `/metrics` | `GET` | Prometheus-style plain-text counters. When `JWT_JWKS_URL` is enabled, the output also includes remote verifier fetch, cache-hit, forced-refresh, failure, cached-key, and freshness timestamp gauges. |
+| `/metrics` | `GET` | Prometheus-style plain-text counters. When `JWT_JWKS_URL` is enabled, the output also includes remote verifier fetch, cache-hit, forced-refresh, failure, cached-key, and freshness timestamp gauges. When a local `LlmSidecar` is configured, the output also includes draft-assistance request, success, failure, and last-attempt timestamp gauges. |
 
 ## Normalization Profiles
 

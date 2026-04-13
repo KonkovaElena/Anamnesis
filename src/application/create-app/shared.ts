@@ -4,6 +4,9 @@ import {
   type JwtRemoteJwksObservabilityReader,
   type RemoteJwtJwksObservabilitySnapshot,
 } from "../../core/jwt-verification";
+import {
+  DISABLED_LLM_SIDECAR_OBSERVABILITY,
+} from "../../domain/anamnesis";
 import type {
   AnamnesisCase,
   AnamnesisStore,
@@ -11,6 +14,8 @@ import type {
   CreateAuditEventInput,
   ExternalAttachmentFetcher,
   LlmSidecar,
+  LlmSidecarObservabilityReader,
+  LlmSidecarObservabilitySnapshot,
   OperationsSummary,
   PhysicianPacket,
 } from "../../domain/anamnesis";
@@ -26,6 +31,7 @@ export interface RouteDependencies {
   auditStore: AuditTrailStore;
   externalAttachmentFetcher?: ExternalAttachmentFetcher;
   llmSidecar?: LlmSidecar;
+  llmSidecarTelemetry?: LlmSidecarObservabilityReader;
   isShuttingDown?: () => boolean;
   remoteJwtJwksTelemetry?: JwtRemoteJwksObservabilityReader;
 }
@@ -121,9 +127,16 @@ export function readRemoteJwtJwksObservability(
   return telemetry?.getObservabilitySnapshot() ?? DISABLED_REMOTE_JWT_JWKS_OBSERVABILITY;
 }
 
+export function readLlmSidecarObservability(
+  telemetry?: LlmSidecarObservabilityReader,
+): LlmSidecarObservabilitySnapshot {
+  return telemetry?.getObservabilitySnapshot() ?? DISABLED_LLM_SIDECAR_OBSERVABILITY;
+}
+
 export function renderMetrics(
   summary: OperationsSummary,
   remoteJwks = DISABLED_REMOTE_JWT_JWKS_OBSERVABILITY,
+  llmSidecar = DISABLED_LLM_SIDECAR_OBSERVABILITY,
 ): string {
   const lines = [
     "# HELP anamnesis_cases_total Total number of anamnesis cases.",
@@ -173,6 +186,24 @@ export function renderMetrics(
     "# HELP anamnesis_remote_jwks_cache_fresh_until_timestamp_seconds Unix timestamp until which the cached remote JWKS is considered fresh.",
     "# TYPE anamnesis_remote_jwks_cache_fresh_until_timestamp_seconds gauge",
     `anamnesis_remote_jwks_cache_fresh_until_timestamp_seconds ${toMetricTimestamp(remoteJwks.cacheFreshUntilAt)}`,
+    "# HELP anamnesis_llm_sidecar_enabled Whether an operator-managed LLM sidecar is configured for draft assistance.",
+    "# TYPE anamnesis_llm_sidecar_enabled gauge",
+    `anamnesis_llm_sidecar_enabled ${llmSidecar.enabled ? 1 : 0}`,
+    "# HELP anamnesis_llm_sidecar_requests_total Total draft-assistance requests sent to the configured LLM sidecar.",
+    "# TYPE anamnesis_llm_sidecar_requests_total gauge",
+    `anamnesis_llm_sidecar_requests_total ${llmSidecar.totalRequests}`,
+    "# HELP anamnesis_llm_sidecar_successes_total Total successful draft-assistance responses accepted from the LLM sidecar.",
+    "# TYPE anamnesis_llm_sidecar_successes_total gauge",
+    `anamnesis_llm_sidecar_successes_total ${llmSidecar.totalSuccesses}`,
+    "# HELP anamnesis_llm_sidecar_failures_total Total failed or rejected draft-assistance responses from the LLM sidecar.",
+    "# TYPE anamnesis_llm_sidecar_failures_total gauge",
+    `anamnesis_llm_sidecar_failures_total ${llmSidecar.totalFailures}`,
+    "# HELP anamnesis_llm_sidecar_last_success_timestamp_seconds Unix timestamp of the last successful draft-assistance response.",
+    "# TYPE anamnesis_llm_sidecar_last_success_timestamp_seconds gauge",
+    `anamnesis_llm_sidecar_last_success_timestamp_seconds ${toMetricTimestamp(llmSidecar.lastSuccessfulRequestAt)}`,
+    "# HELP anamnesis_llm_sidecar_last_failure_timestamp_seconds Unix timestamp of the last failed or rejected draft-assistance response.",
+    "# TYPE anamnesis_llm_sidecar_last_failure_timestamp_seconds gauge",
+    `anamnesis_llm_sidecar_last_failure_timestamp_seconds ${toMetricTimestamp(llmSidecar.lastFailedRequestAt)}`,
   ];
 
   for (const [status, count] of Object.entries(summary.statusCounts)) {

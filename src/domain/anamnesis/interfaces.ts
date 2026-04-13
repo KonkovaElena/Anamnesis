@@ -357,6 +357,30 @@ export interface LlmDraftAssistanceResult {
   disclaimer: string;
 }
 
+export interface LlmSidecarObservabilitySnapshot {
+  enabled: boolean;
+  configuredModel: string | null;
+  totalRequests: number;
+  totalSuccesses: number;
+  totalFailures: number;
+  lastSuccessfulRequestAt: string | null;
+  lastFailedRequestAt: string | null;
+}
+
+export interface LlmSidecarObservabilityReader {
+  getObservabilitySnapshot(): LlmSidecarObservabilitySnapshot;
+}
+
+export const DISABLED_LLM_SIDECAR_OBSERVABILITY: LlmSidecarObservabilitySnapshot = {
+  enabled: false,
+  configuredModel: null,
+  totalRequests: 0,
+  totalSuccesses: 0,
+  totalFailures: 0,
+  lastSuccessfulRequestAt: null,
+  lastFailedRequestAt: null,
+};
+
 export interface LlmSidecar {
   isAvailable(): Promise<boolean>;
   assistDraft(input: LlmDraftAssistanceInput): Promise<LlmDraftAssistanceResult>;
