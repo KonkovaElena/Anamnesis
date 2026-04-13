@@ -3,6 +3,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
 import type { AnamnesisCase } from "../src/domain/anamnesis";
 import { SqliteAnamnesisStore } from "../src/infrastructure/SqliteAnamnesisStore";
@@ -11,6 +12,27 @@ const TEST_KEY = randomBytes(32);
 
 function makeTempDir(): string {
   return mkdtempSync(join(tmpdir(), "pd-test-"));
+}
+
+async function cleanupTempDir(dir: string): Promise<void> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    try {
+      rmSync(dir, { recursive: true, force: true });
+      return;
+    } catch (error: unknown) {
+      const code = (error as NodeJS.ErrnoException | undefined)?.code;
+      if (code !== "EPERM" && code !== "EBUSY" && code !== "ENOTEMPTY") {
+        throw error;
+      }
+
+      lastError = error;
+      await delay(50 * (attempt + 1));
+    }
+  }
+
+  throw lastError;
 }
 
 function makeCase(overrides?: Partial<AnamnesisCase>): AnamnesisCase {
@@ -44,7 +66,7 @@ test("saveCase + getCase roundtrip", async () => {
     assert.deepStrictEqual(retrieved, c);
     store.close();
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    await cleanupTempDir(dir);
   }
 });
 
@@ -56,7 +78,7 @@ test("getCase returns undefined for missing id", async () => {
     assert.equal(result, undefined);
     store.close();
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    await cleanupTempDir(dir);
   }
 });
 
@@ -76,7 +98,7 @@ test("listCases returns cases sorted by createdAt descending", async () => {
     assert.equal(list[1].caseId, older.caseId);
     store.close();
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    await cleanupTempDir(dir);
   }
 });
 
@@ -95,7 +117,7 @@ test("saveCase upserts on existing caseId", async () => {
     assert.equal(list[0].patientLabel, "Updated Patient");
     store.close();
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    await cleanupTempDir(dir);
   }
 });
 
@@ -113,7 +135,7 @@ test("deleteCase returns true for existing case", async () => {
     assert.equal(retrieved, undefined);
     store.close();
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    await cleanupTempDir(dir);
   }
 });
 
@@ -125,7 +147,7 @@ test("deleteCase returns false for missing case", async () => {
     assert.equal(deleted, false);
     store.close();
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    await cleanupTempDir(dir);
   }
 });
 
@@ -144,7 +166,7 @@ test("data persists across store instances", async () => {
     assert.deepStrictEqual(retrieved, c);
     store2.close();
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    await cleanupTempDir(dir);
   }
 });
 
@@ -162,6 +184,6 @@ test("data is actually encrypted on disk (not plaintext)", async () => {
     const raw = readFileSync(dbPath, "utf8");
     assert.equal(raw.includes("UNIQUE_PATIENT_MARKER_12345"), false, "Patient data found in plaintext on disk");
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    await cleanupTempDir(dir);
   }
 });

@@ -44,6 +44,13 @@ async function main() {
   const rateLimitRpm = Number(process.env.RATE_LIMIT_RPM ?? "0") || undefined;
   const storePath = process.env.STORE_PATH?.trim() || undefined;
   const encryptionKey = process.env.ENCRYPTION_KEY?.trim() || undefined;
+  const llmSidecarBaseUrl = process.env.LLM_SIDECAR_BASE_URL?.trim() || undefined;
+  const llmSidecarModel = process.env.LLM_SIDECAR_MODEL?.trim() || undefined;
+  const llmSidecarApiKey = process.env.LLM_SIDECAR_API_KEY?.trim() || undefined;
+  const llmSidecarTimeoutMsRaw = process.env.LLM_SIDECAR_TIMEOUT_MS?.trim();
+  const llmSidecarTimeoutMs = llmSidecarTimeoutMsRaw
+    ? Number.parseInt(llmSidecarTimeoutMsRaw, 10)
+    : undefined;
   const externalAttachmentAllowedHosts = (process.env.EXTERNAL_ATTACHMENT_HOST_ALLOWLIST ?? "")
     .split(",")
     .map((value) => value.trim().toLowerCase())
@@ -74,6 +81,10 @@ async function main() {
     rateLimitRpm,
     storePath,
     encryptionKey,
+    llmSidecarBaseUrl,
+    llmSidecarModel,
+    llmSidecarApiKey,
+    llmSidecarTimeoutMs,
     externalAttachmentAllowedHosts,
   });
   const port = resolvePort();

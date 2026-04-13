@@ -8,6 +8,7 @@ import { InMemoryAuditTrailStore } from "./infrastructure/InMemoryAuditTrailStor
 import { parseEncryptionKey } from "./infrastructure/encryption";
 import { HttpExternalAttachmentFetcher } from "./infrastructure/HttpExternalAttachmentFetcher";
 import { NoOpLlmSidecar } from "./infrastructure/NoOpLlmSidecar";
+import { OpenAiCompatibleLlmSidecar } from "./infrastructure/OpenAiCompatibleLlmSidecar";
 import { assertRemoteJwtJwksConfiguration, RemoteJwtJwksProvider } from "./infrastructure/RemoteJwtJwksProvider";
 import { SqliteAuditTrailStore } from "./infrastructure/SqliteAuditTrailStore";
 import { SqliteAnamnesisStore } from "./infrastructure/SqliteAnamnesisStore";
@@ -31,8 +32,44 @@ export interface BootstrapOptions {
   externalAttachmentFetcher?: ExternalAttachmentFetcher;
   externalAttachmentAllowedHosts?: string[];
   llmSidecar?: LlmSidecar;
+  llmSidecarBaseUrl?: string;
+  llmSidecarModel?: string;
+  llmSidecarApiKey?: string;
+  llmSidecarTimeoutMs?: number;
+  llmSidecarFetchImplementation?: typeof fetch;
   jwtJwksFetchImplementation?: typeof fetch;
   jwtJwksNow?: () => number;
+}
+
+function assertLlmSidecarConfiguration(options: BootstrapOptions | undefined): void {
+  const hasBaseUrl = Boolean(options?.llmSidecarBaseUrl?.trim());
+  const hasModel = Boolean(options?.llmSidecarModel?.trim());
+
+  if (hasBaseUrl === hasModel) {
+    return;
+  }
+
+  throw new Error(
+    "LLM_SIDECAR_BASE_URL and LLM_SIDECAR_MODEL must be configured together when enabling the OpenAI-compatible LLM sidecar.",
+  );
+}
+
+function createConfiguredLlmSidecar(options: BootstrapOptions | undefined): LlmSidecar {
+  if (options?.llmSidecar) {
+    return options.llmSidecar;
+  }
+
+  if (options?.llmSidecarBaseUrl?.trim() && options.llmSidecarModel?.trim()) {
+    return new OpenAiCompatibleLlmSidecar({
+      baseUrl: options.llmSidecarBaseUrl,
+      model: options.llmSidecarModel,
+      apiKey: options.llmSidecarApiKey,
+      timeoutMs: options.llmSidecarTimeoutMs,
+      fetchImplementation: options.llmSidecarFetchImplementation,
+    });
+  }
+
+  return new NoOpLlmSidecar();
 }
 
 function assertProductionJwtSecretStrength(jwtSecret: string | undefined, nodeEnv: string | undefined): void {
@@ -80,6 +117,7 @@ export function bootstrap(options?: BootstrapOptions) {
   const allowInsecureDevAuth = options?.allowInsecureDevAuth === true;
 
   assertJwtVerificationConfiguration(options ?? {}, normalizedNodeEnv);
+  assertLlmSidecarConfiguration(options);
 
   if (!options?.apiKey && !options?.jwtSecret && !options?.jwtPublicKey && !options?.jwtJwks && !options?.jwtJwksUrl) {
     if (!allowInsecureDevAuth) {
@@ -98,7 +136,7 @@ export function bootstrap(options?: BootstrapOptions) {
   });
   const externalAttachmentFetcher = options?.externalAttachmentFetcher
     ?? httpExternalAttachmentFetcher.fetchAttachment.bind(httpExternalAttachmentFetcher);
-  const llmSidecar = options?.llmSidecar ?? new NoOpLlmSidecar();
+  const llmSidecar = createConfiguredLlmSidecar(options);
   const remoteJwtJwksProvider = options?.jwtJwksUrl
     ? new RemoteJwtJwksProvider({
         issuer: options.jwtIssuer!,

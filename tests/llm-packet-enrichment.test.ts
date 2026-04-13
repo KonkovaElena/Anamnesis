@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { once } from "node:events";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import test from "node:test";
 import type { LlmDraftAssistanceInput, LlmDraftAssistanceResult, LlmSidecar } from "../src/domain/anamnesis";
 import { jsonRequest, withServer } from "./helpers";
@@ -84,6 +87,53 @@ async function createDraftableCase(baseUrl: string): Promise<string> {
   assert.equal(createCaseResponse.status, 201);
   assert.equal(artifactResponse.status, 201);
   return caseId;
+}
+
+async function withLocalOpenAiSidecar(
+  run: (baseUrl: string, seenBodies: Array<Record<string, unknown>>) => Promise<void>,
+): Promise<void> {
+  const seenBodies: Array<Record<string, unknown>> = [];
+  const server = createServer(async (request, response) => {
+    const chunks: Buffer[] = [];
+    for await (const chunk of request) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+
+    seenBodies.push(JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<string, unknown>);
+    response.setHeader("content-type", "application/json");
+    response.end(JSON.stringify({
+      id: "chatcmpl-runtime",
+      object: "chat.completion",
+      model: "runtime-local-sidecar",
+      choices: [
+        {
+          index: 0,
+          finish_reason: "stop",
+          message: {
+            role: "assistant",
+            content: "Local HTTP sidecar flagged the newest artifact for clinician verification before packet finalization.",
+          },
+        },
+      ],
+      usage: {
+        prompt_tokens: 155,
+        completion_tokens: 29,
+        total_tokens: 184,
+      },
+    }));
+  });
+
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const address = server.address() as AddressInfo;
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+
+  try {
+    await run(baseUrl, seenBodies);
+  } finally {
+    server.close();
+    await once(server, "close");
+  }
 }
 
 test("available LLM sidecar appends draft-only enrichment to a physician packet and records audit metadata", async () => {
@@ -183,4 +233,53 @@ test("sidecar failures fail closed and still return a deterministic physician pa
       false,
     );
   }, { llmSidecar: sidecar });
+});
+
+test("bootstrap-configured OpenAI-compatible LLM sidecar enriches physician packets via the runtime wiring", async () => {
+  await withLocalOpenAiSidecar(async (sidecarBaseUrl, seenBodies) => {
+    await withServer(async (baseUrl) => {
+      const caseId = await createDraftableCase(baseUrl);
+
+      const packetResponse = await jsonRequest<{
+        packet: {
+          disclaimer: string;
+          sections: Array<{ label: string; content: string }>;
+        };
+      }>(baseUrl, `/api/cases/${caseId}/physician-packets`, {
+        method: "POST",
+        body: {
+          focus: "Runtime sidecar draft",
+        },
+      });
+
+      assert.equal(packetResponse.status, 201);
+      assert.equal(seenBodies.length, 1);
+      assert.equal(seenBodies[0]?.model, "runtime-local-sidecar");
+      assert.match(JSON.stringify(seenBodies[0]?.messages), /Runtime sidecar draft/i);
+      assert.equal(
+        packetResponse.body.packet.sections.some((section) => section.label === "Draft assistance"),
+        true,
+      );
+      assert.match(packetResponse.body.packet.disclaimer, /clinician verification/i);
+
+      const auditResponse = await jsonRequest<{
+        events: Array<{
+          eventType: string;
+          details?: {
+            llmDraftAssistanceModel?: string;
+            llmDraftAssistancePromptTokens?: number;
+          };
+        }>;
+      }>(baseUrl, `/api/cases/${caseId}/audit-events`);
+
+      const draftedEvent = auditResponse.body.events.find((event) => event.eventType === "packet.drafted");
+      assert.equal(draftedEvent?.details?.llmDraftAssistanceModel, "runtime-local-sidecar");
+      assert.equal(draftedEvent?.details?.llmDraftAssistancePromptTokens, 155);
+    }, {
+      llmSidecarBaseUrl: sidecarBaseUrl,
+      llmSidecarModel: "runtime-local-sidecar",
+      llmSidecarApiKey: "runtime-sidecar-key",
+      llmSidecarTimeoutMs: 1000,
+    });
+  });
 });

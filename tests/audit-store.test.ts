@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
 import { verifyAuditChain, type ChainedAuditEventRecord } from "../src/core/audit-events";
 
@@ -50,6 +51,27 @@ function makeTempDir(): string {
   return mkdtempSync(join(tmpdir(), "pd-audit-"));
 }
 
+async function cleanupTempDir(dir: string): Promise<void> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    try {
+      rmSync(dir, { recursive: true, force: true });
+      return;
+    } catch (error: unknown) {
+      const code = (error as NodeJS.ErrnoException | undefined)?.code;
+      if (code !== "EPERM" && code !== "EBUSY" && code !== "ENOTEMPTY") {
+        throw error;
+      }
+
+      lastError = error;
+      await delay(50 * (attempt + 1));
+    }
+  }
+
+  throw lastError;
+}
+
 function makeEvent(overrides?: Partial<AuditEventView>): AuditEventView {
   const eventId = overrides?.eventId ?? randomUUID();
   return {
@@ -85,7 +107,7 @@ test("SqliteAuditTrailStore appends and lists case-scoped audit events in order"
     assert.equal(await store.countEvents(), 2);
   } finally {
     store?.close();
-    rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+    await cleanupTempDir(dir);
   }
 });
 
@@ -109,7 +131,7 @@ test("SqliteAuditTrailStore preserves audit history across store instances and d
   } finally {
     store2?.close();
     store1?.close();
-    rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+    await cleanupTempDir(dir);
   }
 });
 
@@ -131,7 +153,7 @@ test("SqliteAuditTrailStore lists audit events by correlation id across cases", 
     assert.ok(events.every((event) => event.auditId === event.eventId));
   } finally {
     store?.close();
-    rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+    await cleanupTempDir(dir);
   }
 });
 
@@ -179,6 +201,6 @@ test("SqliteAuditTrailStore persists hash-chain values and verifies them across 
   } finally {
     store2?.close();
     store1?.close();
-    rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+    await cleanupTempDir(dir);
   }
 });

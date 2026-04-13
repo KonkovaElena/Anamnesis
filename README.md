@@ -173,6 +173,7 @@ Operational probes:
 
 - `/metrics` remains unauthenticated like `/healthz` and `/readyz`, so monitoring access should sit behind separate network controls when exposure beyond the local trust boundary is possible. When `JWT_JWKS_URL` is enabled, the metrics surface also includes remote verifier freshness, cache-hit, refresh, and failure counters.
 - If you enable `RATE_LIMIT_RPM` behind a reverse proxy or load balancer, configure Express proxy trust for the deployment topology before relying on `request.ip` for enforcement.
+- Optional draft-only packet enrichment can be enabled by pointing `LLM_SIDECAR_BASE_URL` and `LLM_SIDECAR_MODEL` at an operator-managed OpenAI-compatible sidecar. The write path remains fail-closed: invalid sidecar responses do not block packet drafting and do not widen the product claim boundary.
 
 ## Docker
 
@@ -206,6 +207,10 @@ The image uses Node 24 Alpine, runs as a non-root user, and includes a built-in 
 | `ALLOW_INSECURE_DEV_AUTH` | No | `false` | Explicit local-development override that allows startup without `API_KEY`, `JWT_SECRET`, `JWT_PUBLIC_KEY`, `JWT_JWKS`, or `JWT_JWKS_URL`; rejected when `NODE_ENV=production` |
 | `RATE_LIMIT_RPM` | No | `0` | Maximum requests per minute per IP; health and readiness probes are exempt |
 | `EXTERNAL_ATTACHMENT_HOST_ALLOWLIST` | No | — | Optional comma-separated hostname allowlist for external FHIR bundle attachment fetches |
+| `LLM_SIDECAR_BASE_URL` | No | — | Base URL for an operator-managed OpenAI-compatible draft-assistance sidecar; must be paired with `LLM_SIDECAR_MODEL` |
+| `LLM_SIDECAR_MODEL` | No | — | Model name passed to the OpenAI-compatible draft-assistance sidecar; must be paired with `LLM_SIDECAR_BASE_URL` |
+| `LLM_SIDECAR_API_KEY` | No | — | Optional Bearer token sent to the configured draft-assistance sidecar |
+| `LLM_SIDECAR_TIMEOUT_MS` | No | `5000` | Positive integer timeout in milliseconds for one draft-assistance sidecar request |
 | `STORE_PATH` | No | — | Path to SQLite database file; when unset, data is stored in memory only |
 | `ENCRYPTION_KEY` | When `STORE_PATH` is set | — | 64-character hex string used for AES-256-GCM encryption at rest |
 

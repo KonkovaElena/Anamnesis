@@ -43,6 +43,7 @@ The April 2026 review keeps that thesis unchanged. The repository is strongest t
 - explicit, request-gated `https` dereference for `attachment.url` when the fetched response remains `text/plain` or `text/markdown`, stays within byte limits, resolves only to public addresses, and optionally matches an operator-supplied host allowlist;
 - in-memory fallback when `STORE_PATH` is not configured;
 - explicit bootstrap seam in `src/bootstrap.ts`;
+- optional OpenAI-compatible local-model sidecar support for draft-only packet assistance, with `NoOp` fallback when not configured;
 - reduced Domain -> Application -> Infrastructure split;
 - no plugin, MCP, MAS, multi-agent council, or evidence-engine runtime adoption in this slice.
 
