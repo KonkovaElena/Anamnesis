@@ -1,8 +1,8 @@
 ---
 title: "Anamnesis Evidence Register"
 status: active
-version: "1.2.0"
-last_updated: "2026-04-06"
+version: "1.3.0"
+last_updated: "2026-04-13"
 tags: [anamnesis, healthcare, evidence, academic]
 ---
 
@@ -79,13 +79,19 @@ No scope upgrade should be inferred from model availability, benchmark tables, o
 | vLLM | Public release line observed at `0.19.0`; current docs expose OpenAI-compatible serving, Responses API, tool calling, structured outputs, observability, and production deployment patterns. | Candidate evaluation or serving sidecar if the standalone outgrows a lightweight local-model workflow. Prefer sidecar deployment over baking complex inference infrastructure into the current write path. |
 | MedGemma model card | MedGemma is positioned as a starting point for downstream healthcare applications and explicitly requires adaptation plus independent validation. Its outputs are not intended to directly inform diagnosis, treatment, or patient-management decisions. | Supports preserving the current claim boundary even if a medical foundation model is explored later. Benchmark wins do not justify direct clinical claims. |
 
+### Current Local Evaluation Gate
+
+| Surface | Current local evidence | Operational consequence for Anamnesis |
+|---|---|---|
+| OpenAI-compatible `LlmSidecar` draft assistance | Fixture-backed baseline evaluation pack now exists in `tests/llm-sidecar-evaluation.test.ts` with accepted review-oriented fixture cases plus rejected unsafe clinical fixture cases sourced from `tests/fixtures.ts`. The current baseline covers chronology-and-gap summaries, review-question framing, diagnosis language, treatment recommendations, and prescription language. | The current sidecar seam now has a concrete local go/no-go rule: all accepted fixtures must enrich successfully, all rejected fixtures must fail closed without packet enrichment, and the packet workflow must remain deterministic when the sidecar output is unsafe. This is sufficient for the current draft-only seam, but not yet for widening public claims or enabling retrieval-backed assistance. |
+
 ## Research-Derived Controls
 
 | Research | High-level contribution | What it means here |
 |---|---|---|
 | `arXiv:2603.10600` — Trajectory-Informed Memory Generation for Self-Improving Agent Systems | Extract structured learnings from execution trajectories with provenance-aware retrieval. | Future AI workflow improvements should preserve failure and recovery lessons as explicit evidence artifacts instead of mixing them into product claims. |
 | `arXiv:2603.10047` — Toward Epistemic Stability | Enhanced data registries, domain glossaries, and single-task specialization reduce output variance better than vague prompting alone. | If Anamnesis adds AI assistance later, first invest in fixtures, schemas, glossaries, and bounded tasks before expanding prompting complexity. |
-| `arXiv:2602.21368` — Black-Box Reliability Certification | Reliability should be treated as an explicit deployment gate derived from sampling and calibration, not informal confidence. | No future AI-generated workflow feature should be promoted without a fixed evaluation pack and an explicit go/no-go gate. |
+| `arXiv:2602.21368` — Black-Box Reliability Certification | Reliability should be treated as an explicit deployment gate derived from sampling and calibration, not informal confidence. | The current sidecar seam now has a baseline local go/no-go gate through the fixture-backed evaluation pack. No future AI-generated workflow feature should be promoted beyond the current draft-only scope without a broader fixed evaluation pack and an explicit upgraded go/no-go gate. |
 | `arXiv:2603.11619` — Taming OpenClaw | Agent systems need lifecycle-oriented security across initialization, input, inference, decision, and execution. | Any future agentic subsystem in Anamnesis needs lifecycle security review, memory-integrity checks, and capability bounds before activation. |
 | `arXiv:2510.19771` — PROBE | Proactivity should be evaluated across search, identify, and resolve, not only on fluent output. | Future assistant features must be judged on whether they actually find bottlenecks and improve workflow quality, not on narrative polish alone. |
 
