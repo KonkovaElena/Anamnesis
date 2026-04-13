@@ -718,7 +718,7 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: JWT bearer token validated via HS256 when `JWT_SECRET` is configured, via RS256 when `JWT_PUBLIC_KEY` is configured, or via RS256 local JWKS selection when `JWT_JWKS` is configured. Runtime validation enforces signature, `exp`, `iat`, `nbf`, non-empty `sub`, configured `iss`/`aud`, optional JOSE `typ`, and an RSA-2048 minimum for RS256 verification keys.
+      description: JWT bearer token validated via HS256 when `JWT_SECRET` is configured, via RS256 when `JWT_PUBLIC_KEY` is configured, via RS256 local JWKS selection when `JWT_JWKS` is configured, or via issuer-bound RS256 remote JWKS retrieval when `JWT_JWKS_URL` is configured. Runtime validation enforces signature, `exp`, `iat`, `nbf`, non-empty `sub`, configured `iss`/`aud`, optional JOSE `typ`, and an RSA-2048 minimum for RS256 verification keys.
   parameters:
     CaseId:
       name: caseId
@@ -1693,10 +1693,85 @@ components:
     OperationsSummaryResponse:
       type: object
       additionalProperties: false
-      required: [summary]
+      required: [summary, llmSidecar, remoteJwks]
       properties:
         summary:
           $ref: '#/components/schemas/OperationsSummary'
+        llmSidecar:
+          $ref: '#/components/schemas/LlmSidecarObservability'
+        remoteJwks:
+          $ref: '#/components/schemas/RemoteJwksObservability'
+    LlmSidecarObservability:
+      type: object
+      additionalProperties: false
+      required:
+        - enabled
+        - configuredModel
+        - totalRequests
+        - totalSuccesses
+        - totalFailures
+        - lastSuccessfulRequestAt
+        - lastFailedRequestAt
+      properties:
+        enabled:
+          type: boolean
+        configuredModel:
+          type: [string, 'null']
+        totalRequests:
+          type: integer
+          minimum: 0
+        totalSuccesses:
+          type: integer
+          minimum: 0
+        totalFailures:
+          type: integer
+          minimum: 0
+        lastSuccessfulRequestAt:
+          type: [string, 'null']
+          format: date-time
+        lastFailedRequestAt:
+          type: [string, 'null']
+          format: date-time
+    RemoteJwksObservability:
+      type: object
+      additionalProperties: false
+      required:
+        - enabled
+        - totalFetches
+        - totalCacheHits
+        - totalKidMissRefreshes
+        - totalFetchFailures
+        - cachedKeyCount
+        - lastSuccessfulFetchAt
+        - lastFailedFetchAt
+        - cacheFreshUntilAt
+      properties:
+        enabled:
+          type: boolean
+        totalFetches:
+          type: integer
+          minimum: 0
+        totalCacheHits:
+          type: integer
+          minimum: 0
+        totalKidMissRefreshes:
+          type: integer
+          minimum: 0
+        totalFetchFailures:
+          type: integer
+          minimum: 0
+        cachedKeyCount:
+          type: integer
+          minimum: 0
+        lastSuccessfulFetchAt:
+          type: [string, 'null']
+          format: date-time
+        lastFailedFetchAt:
+          type: [string, 'null']
+          format: date-time
+        cacheFreshUntilAt:
+          type: [string, 'null']
+          format: date-time
     HealthResponse:
       type: object
       additionalProperties: false
