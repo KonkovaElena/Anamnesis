@@ -154,6 +154,12 @@ Publication-grade local verification:
 npm run validate:public-export
 ```
 
+Focused local sidecar evaluation gate:
+
+```bash
+npm run test:llm-evaluation
+```
+
 This expands to:
 
 ```bash
@@ -174,7 +180,7 @@ Operational probes:
 - `/metrics` remains unauthenticated like `/healthz` and `/readyz`, so monitoring access should sit behind separate network controls when exposure beyond the local trust boundary is possible. When `JWT_JWKS_URL` is enabled, the metrics surface also includes remote verifier freshness, cache-hit, refresh, and failure counters. When an OpenAI-compatible `LlmSidecar` is configured, the same surface also exposes draft-assistance request, success, failure, and last-attempt timestamps.
 - If you enable `RATE_LIMIT_RPM` behind a reverse proxy or load balancer, configure Express proxy trust for the deployment topology before relying on `request.ip` for enforcement.
 - Optional draft-only packet enrichment can be enabled by pointing `LLM_SIDECAR_BASE_URL` and `LLM_SIDECAR_MODEL` at an operator-managed OpenAI-compatible sidecar. The write path remains fail-closed: invalid, empty, or clinically unsafe sidecar responses do not block packet drafting and do not widen the product claim boundary.
-- The current sidecar baseline includes a fixture-backed evaluation pack in `tests/llm-sidecar-evaluation.test.ts` that accepts review-oriented summaries and rejects diagnosis, treatment, or prescription language before packet enrichment is accepted.
+- The current sidecar baseline includes a fixture-backed evaluation pack in `tests/llm-sidecar-evaluation.test.ts`; run `npm run test:llm-evaluation` to verify that review-oriented summaries are accepted and diagnosis, treatment, or prescription language is rejected before packet enrichment is accepted.
 
 ## Docker
 
