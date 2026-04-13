@@ -136,6 +136,49 @@ async function withLocalOpenAiSidecar(
   }
 }
 
+async function withUnsafeLocalOpenAiSidecar(
+  run: (baseUrl: string) => Promise<void>,
+): Promise<void> {
+  const server = createServer(async (request, response) => {
+    for await (const _chunk of request) {
+      // Consume request body.
+    }
+
+    response.setHeader("content-type", "application/json");
+    response.end(JSON.stringify({
+      id: "chatcmpl-unsafe-runtime",
+      object: "chat.completion",
+      model: "runtime-local-sidecar",
+      choices: [
+        {
+          index: 0,
+          finish_reason: "stop",
+          message: {
+            role: "assistant",
+            content: "Diagnosis: likely migraine. Begin treatment with propranolol 20 mg twice daily.",
+          },
+        },
+      ],
+      usage: {
+        prompt_tokens: 91,
+        completion_tokens: 18,
+        total_tokens: 109,
+      },
+    }));
+  });
+
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const address = server.address() as AddressInfo;
+
+  try {
+    await run(`http://127.0.0.1:${address.port}`);
+  } finally {
+    server.close();
+    await once(server, "close");
+  }
+}
+
 test("available LLM sidecar appends draft-only enrichment to a physician packet and records audit metadata", async () => {
   const sidecar = new AvailableSidecar();
 
@@ -307,6 +350,61 @@ test("bootstrap-configured OpenAI-compatible LLM sidecar enriches physician pack
       llmSidecarBaseUrl: sidecarBaseUrl,
       llmSidecarModel: "runtime-local-sidecar",
       llmSidecarApiKey: "runtime-sidecar-key",
+      llmSidecarTimeoutMs: 1000,
+    });
+  });
+});
+
+test("unsafe clinical sidecar output is rejected and packet drafting remains fail-closed", async () => {
+  await withUnsafeLocalOpenAiSidecar(async (sidecarBaseUrl) => {
+    await withServer(async (baseUrl) => {
+      const caseId = await createDraftableCase(baseUrl);
+
+      const packetResponse = await jsonRequest<{
+        packet: {
+          disclaimer: string;
+          sections: Array<{ label: string; content: string }>;
+        };
+      }>(baseUrl, `/api/cases/${caseId}/physician-packets`, {
+        method: "POST",
+        body: {
+          focus: "Unsafe sidecar draft",
+        },
+      });
+
+      assert.equal(packetResponse.status, 201);
+      assert.equal(
+        packetResponse.body.packet.sections.some((section) => section.label === "Draft assistance"),
+        false,
+      );
+      assert.doesNotMatch(packetResponse.body.packet.disclaimer, /Model-generated draft assistance requires clinician verification/);
+
+      const auditResponse = await jsonRequest<{
+        events: Array<{
+          eventType: string;
+          details?: {
+            llmDraftAssistanceModel?: string;
+          };
+        }>;
+      }>(baseUrl, `/api/cases/${caseId}/audit-events`);
+
+      const draftedEvent = auditResponse.body.events.find((event) => event.eventType === "packet.drafted");
+      assert.equal(draftedEvent?.details?.llmDraftAssistanceModel, undefined);
+
+      const summaryResponse = await jsonRequest<{
+        llmSidecar: {
+          totalRequests: number;
+          totalSuccesses: number;
+          totalFailures: number;
+        };
+      }>(baseUrl, "/api/operations/summary");
+
+      assert.equal(summaryResponse.body.llmSidecar.totalRequests, 1);
+      assert.equal(summaryResponse.body.llmSidecar.totalSuccesses, 0);
+      assert.equal(summaryResponse.body.llmSidecar.totalFailures, 1);
+    }, {
+      llmSidecarBaseUrl: sidecarBaseUrl,
+      llmSidecarModel: "runtime-local-sidecar",
       llmSidecarTimeoutMs: 1000,
     });
   });

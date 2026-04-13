@@ -14,6 +14,15 @@ const MAX_SUMMARY_LENGTH = 600;
 const MAX_TITLE_LENGTH = 160;
 const MAX_TEXT_FIELD_LENGTH = 800;
 const MAX_QUESTION_COUNT = 6;
+const UNSAFE_CLINICAL_LANGUAGE_PATTERNS = [
+  /\bdiagnosis\s*:/i,
+  /\bdiagnosed\s+with\b/i,
+  /\btreatment\s+plan\b/i,
+  /\bprescrib(?:e|ed|ing)\b/i,
+  /\bstart\s+[a-z][^.!?\n]{0,80}\b(?:mg|mcg|g|ml|tablet|capsule|dose|daily|twice daily)\b/i,
+  /\bbegin\s+treatment\b/i,
+  /\btake\s+[a-z0-9][^.!?\n]{0,80}\b(?:mg|mcg|g|ml|tablet|capsule|daily|twice daily)\b/i,
+];
 
 interface OpenAiCompatibleChatCompletionResponse {
   model?: string;
@@ -121,6 +130,14 @@ function extractAssistantText(content: unknown): string {
 
 function toUsageNumber(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function assertSafeDraftAssistance(text: string): void {
+  for (const pattern of UNSAFE_CLINICAL_LANGUAGE_PATTERNS) {
+    if (pattern.test(text)) {
+      throw new Error("LLM sidecar returned unsafe clinical language for a draft-only packet.");
+    }
+  }
 }
 
 export class OpenAiCompatibleLlmSidecar implements LlmSidecar, LlmSidecarObservabilityReader {
@@ -231,6 +248,8 @@ export class OpenAiCompatibleLlmSidecar implements LlmSidecar, LlmSidecarObserva
       if (assistantText.length === 0) {
         throw new Error("LLM sidecar did not return assistant text.");
       }
+
+      assertSafeDraftAssistance(assistantText);
 
       this.totalSuccesses += 1;
       this.lastSuccessfulRequestAt = new Date().toISOString();

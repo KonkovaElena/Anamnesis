@@ -55,7 +55,7 @@ These are repository-operations tasks, not product-scope upgrades.
 3. ~~Tighten the audit-integrity narrative: keep append-only workflow history as implemented truth, but treat sealing, notarization, and stronger confidentiality boundaries as explicit backlog.~~ **Done (R-01)**: SHA-256 hash-chain on audit trail with genesis hash, chain verification, and tamper-detection API.
 4. Add richer sharing policy or tenant-scoped RBAC only if the standalone needs collaboration beyond the current revocable owner-admin sharing model.
 5. Close the GitHub-side dependency-graph and repository-protection gap recorded in the post-push audit.
-6. **Phase 3 starter (R-02)**: packet drafting now supports an optional OpenAI-compatible local model adapter through `LLM_SIDECAR_BASE_URL` and `LLM_SIDECAR_MODEL`, while preserving deterministic fail-closed drafting when the sidecar is absent or invalid. Operator-visible sidecar request and failure telemetry now surfaces through the existing summary and metrics routes. Retrieval-backed grounding, rationale capture, and stronger evaluation packs remain explicit Phase 3 backlog.
+6. **Phase 3 starter (R-02)**: packet drafting now supports an optional OpenAI-compatible local model adapter through `LLM_SIDECAR_BASE_URL` and `LLM_SIDECAR_MODEL`, while preserving deterministic fail-closed drafting when the sidecar is absent, invalid, or returns clinically unsafe language. Operator-visible sidecar request and failure telemetry now surfaces through the existing summary and metrics routes. Retrieval-backed grounding, rationale capture, and stronger evaluation packs remain explicit Phase 3 backlog.
 
 ## Current Extraction Foundations
 

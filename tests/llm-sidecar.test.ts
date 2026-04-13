@@ -221,6 +221,61 @@ test("OpenAiCompatibleLlmSidecar rejects empty assistant content", async () => {
   }
 });
 
+test("OpenAiCompatibleLlmSidecar rejects diagnostic or treatment language and records a failed attempt", async () => {
+  const server = createServer(async (request, response) => {
+    for await (const _chunk of request) {
+      // Consume request body.
+    }
+
+    response.setHeader("content-type", "application/json");
+    response.end(JSON.stringify({
+      id: "chatcmpl-unsafe",
+      object: "chat.completion",
+      model: "local-sidecar-model",
+      choices: [
+        {
+          index: 0,
+          finish_reason: "stop",
+          message: {
+            role: "assistant",
+            content: "Diagnosis: migraine. Start propranolol 20 mg twice daily and follow this treatment plan.",
+          },
+        },
+      ],
+      usage: {
+        prompt_tokens: 19,
+        completion_tokens: 21,
+        total_tokens: 40,
+      },
+    }));
+  });
+
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const address = server.address() as AddressInfo;
+  const sidecar = new OpenAiCompatibleLlmSidecar({
+    baseUrl: `http://127.0.0.1:${address.port}`,
+    model: "local-sidecar-model",
+  });
+
+  try {
+    await assert.rejects(
+      () => sidecar.assistDraft(SAMPLE_INPUT),
+      (error: unknown) => error instanceof Error && error.message.includes("unsafe clinical language"),
+    );
+
+    const snapshot = sidecar.getObservabilitySnapshot();
+    assert.equal(snapshot.totalRequests, 1);
+    assert.equal(snapshot.totalSuccesses, 0);
+    assert.equal(snapshot.totalFailures, 1);
+    assert.equal(snapshot.lastSuccessfulRequestAt, null);
+    assert.equal(snapshot.lastFailedRequestAt !== null, true);
+  } finally {
+    server.close();
+    await once(server, "close");
+  }
+});
+
 test("bootstrap rejects incomplete OpenAI-compatible LLM sidecar configuration", () => {
   assert.throws(
     () => bootstrap({
