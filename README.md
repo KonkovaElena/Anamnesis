@@ -1,5 +1,7 @@
 # Anamnesis
 
+English | [Русский](README.ru.md)
+
 Evidence-first clinician-in-the-loop workflow control plane for structured case intake, bounded document and FHIR ingestion, physician-packet drafting, explicit review and finalization, and append-only auditability.
 
 This repository is intentionally not an AI doctor, clinical decision engine, or general-purpose FHIR server. Its public scope is workflow support for clinician review, with claims kept narrower than the code, tests, and evidence currently support.
