@@ -58,7 +58,7 @@
     "openapi"
   ],
   "dependencies": {
-    "better-sqlite3": "^12.8.0",
+    "better-sqlite3": "^13.0.3",
     "express": "^5.2.1",
     "helmet": "^8.1.0",
     "zod": "^4.3.6"
